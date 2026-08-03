@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cf-worker-storekit2",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    "STOREKIT_ALLOWED_ENVIRONMENTS": "Production",
+    "STOREKIT_ALLOWED_PRODUCT_IDS": "com.example.app.pro.monthly",
+    "STOREKIT_BUNDLE_ID": "com.example.app",
+    "STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK": "false",
+    "STOREKIT_ALLOW_GRACE_PERIOD_ACCESS": "true"
+  },
+  "d1_databases": [
+    {
+      "binding": "STOREKIT_DB",
+      "database_name": "cf-worker-storekit2",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

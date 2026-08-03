@@ -1,0 +1,60 @@
+{
+  "name": "cf-worker-storekit2",
+  "version": "0.1.0",
+  "description": "A Cloudflare-native StoreKit 2 server module for Workers and D1.",
+  "type": "module",
+  "license": "MIT",
+  "private": false,
+  "files": [
+    "src",
+    "migrations",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prepare": "husky",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage --sequence.shuffle=false",
+    "test:unit": "vitest run test/unit --coverage --sequence.shuffle=false",
+    "test:integration": "vitest run test/integration --coverage.enabled=false --sequence.shuffle=false",
+    "db:migrate:local": "wrangler d1 migrations apply STOREKIT_DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply STOREKIT_DB --remote",
+    "cf:typegen": "wrangler types",
+    "release:check": "npm run format:check && npm run lint && npm run typecheck && npm test && wrangler deploy --dry-run --outdir=/tmp/cf-worker-storekit2-dry-run"
+  },
+  "lint-staged": {
+    "*.{ts,js,json,md,yml,yaml}": [
+      "prettier --check"
+    ],
+    "*.ts": [
+      "eslint --max-warnings=0 --no-warn-ignored"
+    ]
+  },
+  "dependencies": {
+    "@apple/app-store-server-library": "3.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "26.1.2",
+    "@typescript-eslint/eslint-plugin": "8.65.0",
+    "@typescript-eslint/parser": "8.65.0",
+    "@vitest/coverage-v8": "4.1.10",
+    "eslint": "9.39.5",
+    "globals": "17.9.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.3.0",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10",
+    "wrangler": "4.118.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
