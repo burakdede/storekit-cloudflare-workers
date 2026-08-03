@@ -3,6 +3,8 @@
 ## Publishing this repository
 
 - [ ] Review the Apple contract links and the pinned `@apple/app-store-server-library` version.
+- [ ] Confirm the trademark and non-affiliation notices are present in README.md and
+      docs/apple-contract.md.
 - [ ] Confirm the Wrangler `compatibility_date` and version are current.
 - [ ] Run `npm ci`, `npm run cf:typegen`, and `npm run release:check`.
 - [ ] Confirm no secrets, signed production transactions, or customer identifiers are tracked.

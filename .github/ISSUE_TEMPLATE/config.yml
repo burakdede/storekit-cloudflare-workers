@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/burakdede/storekit-cloudflare-workers/security/advisories/new
+    about: Report privately. Never open a public issue for a vulnerability or credential exposure.
+  - name: Integration question
+    url: https://github.com/burakdede/storekit-cloudflare-workers/discussions
+    about: Setup and configuration help. Check docs/configuration.md and docs/operations.md first.

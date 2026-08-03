@@ -1,0 +1,76 @@
+name: Bug report
+description: Something behaves differently from what Apple documents or what this project claims.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste a signed transaction or notification payload, an App Store Connect private
+        key, an Apple bearer token, or a customer identifier.** Those are credentials and personal
+        data. The verification stage and operation names below are enough to diagnose almost
+        everything.
+
+        For a suspected vulnerability, close this and follow
+        [SECURITY.md](../blob/main/SECURITY.md) instead.
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead?
+      description: Include the HTTP status and response body if a route was involved.
+    validations:
+      required: true
+
+  - type: input
+    id: stage
+    attributes:
+      label: Verification stage
+      description: >
+        From your `onEvent` sink, the `verificationStage` field. The HTTP response deliberately
+        omits it. Leave blank if verification was not involved.
+      placeholder: submitted_jws_claims
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: >
+        Output of `describeStoreKitConfig(env)`. It reports secret presence only, never a value, so
+        it is safe to paste. Also include your Wrangler `compatibility_date`.
+      render: json
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Where does it reproduce?
+      options:
+        - Sandbox only
+        - Production only
+        - Both
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have not included any signed payload, key, token, or customer identifier.
+          required: true
+        - label: I have read the troubleshooting table in docs/operations.md.
+          required: true

@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cf-worker-storekit2",
+  "name": "storekit-cloudflare-workers",
   "main": "src/worker.ts",
   // The Apple library needs Node built-ins; without this flag the Worker will not build.
   "compatibility_date": "2026-08-03",
@@ -27,7 +27,7 @@
     {
       // Rename this freely; pass your binding through the handler's `database` option.
       "binding": "STOREKIT_DB",
-      "database_name": "cf-worker-storekit2",
+      "database_name": "storekit-cloudflare-workers",
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }

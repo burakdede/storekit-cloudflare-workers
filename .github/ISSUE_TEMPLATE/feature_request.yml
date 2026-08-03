@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose support for StoreKit or App Store Server behaviour this project does not cover.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The **Scope** section of the README lists what is deliberately not covered and why. If your
+        request is one of those, say why the stated reasoning does not hold for your case.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What can you not do today?
+      description: Describe the situation, not just the API you want.
+    validations:
+      required: true
+
+  - type: input
+    id: apple-docs
+    attributes:
+      label: Apple documentation
+      description: Link to the Apple page describing the behaviour, if there is one.
+
+  - type: textarea
+    id: entitlement-impact
+    attributes:
+      label: Does this change who has access?
+      description: >
+        If it affects entitlement resolution, say what the correct outcome is for each Apple
+        subscription status, including billing grace period and billing retry.
+    validations:
+      required: true

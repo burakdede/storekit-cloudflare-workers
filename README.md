@@ -1,6 +1,11 @@
-# cf-worker-storekit2
+# storekit-cloudflare-workers
 
 Drop-in, server-authoritative **StoreKit 2** for **Cloudflare Workers + D1**.
+
+> **Independent project.** Not affiliated with, endorsed by, or sponsored by Apple Inc. or
+> Cloudflare, Inc. "StoreKit", "App Store" and "Apple" are trademarks of Apple Inc.; "Cloudflare",
+> "Workers" and "D1" are trademarks of Cloudflare, Inc. They are used here only to describe what
+> this software interoperates with.
 
 Copy one directory, apply one schema, set four secrets, mount one handler. You get Apple JWS
 verification, a correct entitlement engine, idempotent App Store Server Notifications V2, and the
@@ -115,7 +120,7 @@ Using a different binding name? Pass it through: `database: (env) => env.MY_DB`.
 ### 3. Create the tables
 
 ```bash
-npx wrangler d1 create cf-worker-storekit2   # copy the id into wrangler.jsonc
+npx wrangler d1 create storekit-cloudflare-workers   # copy the id into wrangler.jsonc
 npm run db:migrate:remote                    # or: wrangler d1 execute <DB> --file=src/storekit/schema.sql
 ```
 
@@ -236,6 +241,42 @@ npm run release:check   # format, lint, typecheck, tests, and a Worker dry-run b
 Tests use injectable verifier boundaries and a D1 fake; no Apple keys or production transactions are
 in this repository.
 
+## Contributing
+
+Bug reports and pull requests are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the
+workflow, and please read the reporting guidance below before opening an issue.
+
+## Reporting a bug
+
+Open a [GitHub issue](../../issues/new/choose) using the bug template. A useful report includes:
+
+- What you expected to happen and what happened instead.
+- The `verificationStage` from your `onEvent` sink, if verification failed. The HTTP response
+  deliberately omits it.
+- The output of `describeStoreKitConfig(env)`, which reports secret **presence** only.
+- Your `STOREKIT_ALLOWED_ENVIRONMENTS`, product allow-list shape, and Wrangler
+  `compatibility_date`.
+- Whether it reproduces in sandbox, production, or both.
+
+**Never paste** a signed transaction or notification payload, an App Store Connect private key, an
+Apple bearer token, or a customer identifier. Those are credentials and personal data. Redact them;
+the stage and operation names are enough to diagnose almost everything.
+
+For a suspected vulnerability or a credential exposure, do **not** open a public issue. Follow
+[`SECURITY.md`](SECURITY.md).
+
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
+
+## Trademarks
+
+This project is independent and is not affiliated with, endorsed by, or sponsored by Apple Inc. or
+Cloudflare, Inc.
+
+Apple, App Store, StoreKit, and TestFlight are trademarks of Apple Inc., registered in the U.S. and
+other countries. Cloudflare, Cloudflare Workers, and D1 are trademarks of Cloudflare, Inc. All
+other trademarks are the property of their respective owners.
+
+These names are used solely to identify the services this software interoperates with, as nominative
+fair use. No claim of ownership or endorsement is made or implied.

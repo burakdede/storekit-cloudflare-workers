@@ -1,5 +1,5 @@
 {
-  "name": "cf-worker-storekit2",
+  "name": "storekit-cloudflare-workers",
   "version": "0.1.0",
   "description": "Drop-in Apple StoreKit 2 subscription backend for Cloudflare Workers and D1. JWS verification, entitlements, and App Store Server Notifications V2 in one mountable handler.",
   "keywords": [
@@ -49,7 +49,7 @@
     "db:migrate:local": "wrangler d1 migrations apply STOREKIT_DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply STOREKIT_DB --remote",
     "cf:typegen": "wrangler types",
-    "release:check": "npm run format:check && npm run lint && npm run typecheck && npm test && wrangler deploy --dry-run --outdir=/tmp/cf-worker-storekit2-dry-run"
+    "release:check": "npm run format:check && npm run lint && npm run typecheck && npm test && wrangler deploy --dry-run --outdir=/tmp/storekit-cloudflare-workers-dry-run"
   },
   "lint-staged": {
     "*.{ts,js,json,md,yml,yaml}": [

@@ -28,3 +28,10 @@ these documents when Apple changes notification fields or API behavior:
 The service intentionally treats Apple-signed data as authoritative only after signature, bundle,
 environment, product, and transaction identity validation. It does not implement legacy receipt or
 V1 notification flows.
+
+## Trademarks
+
+This is an independent project, not affiliated with, endorsed by, or sponsored by Apple Inc. or
+Cloudflare, Inc. Apple, App Store, StoreKit, and TestFlight are trademarks of Apple Inc. Cloudflare,
+Cloudflare Workers, and D1 are trademarks of Cloudflare, Inc. They are used here only to identify
+the services this software interoperates with.
