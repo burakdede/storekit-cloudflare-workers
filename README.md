@@ -85,6 +85,112 @@ to_. Only your app knows that, so `authenticate` is yours to implement. It ships
 
 ---
 
+## How it fits together
+
+```mermaid
+flowchart LR
+    ios["iOS app<br/>StoreKit 2"]
+
+    subgraph worker["Your Cloudflare Worker"]
+        auth["authenticate()<br/>you implement this"]
+        lib["storekit-cloudflare-workers<br/>verify, resolve, persist"]
+    end
+
+    apple["Apple<br/>App Store Server API<br/>and Notifications V2"]
+    d1[("Cloudflare D1")]
+
+    ios -- "signed transaction JWS" --> lib
+    lib -- "who is this caller?" --> auth
+    lib <-->|"verify and reconcile"| apple
+    apple -- "notification webhook" --> lib
+    lib -- "entitlement projection" --> d1
+    d1 -- "current entitlement" --> ios
+```
+
+Two arrows leave your side of the diagram: the client sends Apple-signed material, and
+`authenticate` says who the caller is. Everything else is the module's job.
+
+## Request flows
+
+### A purchase
+
+The standard StoreKit 2 integration. The client never sends product status, expiry, price, or a
+premium flag; only the signed transaction, which the server re-verifies against Apple before
+trusting a single claim in it.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as iOS app
+    participant SK as StoreKit 2
+    participant W as Your Worker
+    participant Apple as Apple servers
+    participant D1 as D1
+
+    App->>SK: product.purchase with appAccountToken
+    SK->>Apple: process the payment
+    Apple-->>SK: signed transaction
+    SK-->>App: verified Transaction plus jwsRepresentation
+    App->>W: POST /storekit/transactions/sync
+    Note over W: authenticate() resolves the account.<br/>Nothing the client claims is trusted.
+    W->>W: Verify JWS signature and Apple certificate chain
+    W->>W: Check bundle id, environment, product allow-list
+    W->>Apple: Get Transaction Info
+    Apple-->>W: Apple-signed copy, replaces the client one
+    W->>Apple: Get All Subscription Statuses
+    Apple-->>W: status plus signedRenewalInfo
+    Note over W: Grace period resolves against<br/>gracePeriodExpiresDate, not the elapsed expiresDate.
+    W->>D1: Upsert projection and audit row in one batch
+    W-->>App: entitlement snapshot
+    App->>SK: transaction.finish()
+```
+
+Finish the transaction only after the server confirms, or a network failure drops the purchase from
+the client queue before the backend recorded it.
+
+### A renewal, cancellation, or refund
+
+Apple pushes these; the customer is not in the app when they happen. This is what keeps the
+projection true between syncs.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Apple as Apple
+    participant W as Your Worker
+    participant D1 as D1
+
+    Apple->>W: POST /storekit/notifications
+    W->>W: Verify JWS. Apple signs it, there is no bearer token.
+    alt notificationUUID already in the replay ledger
+        W-->>Apple: 200 processed, replayed
+    else new notification
+        W->>Apple: Get All Subscription Statuses
+        Apple-->>W: current status and renewal info
+        Note over W: Reconciles against Apple rather than trusting<br/>a payload that may arrive late or out of order.
+        W->>D1: Upsert guarded by Apple signing time
+        Note over D1: A late older event cannot rewind newer state.<br/>Revocations always land.
+        W-->>Apple: 200 processed
+    end
+```
+
+### Reading the entitlement
+
+```mermaid
+sequenceDiagram
+    participant App as iOS app
+    participant W as Your Worker
+    participant D1 as D1
+
+    App->>W: GET /storekit/entitlement
+    W->>D1: Read the projection for this account
+    D1-->>W: stored row
+    Note over W: Expiry is re-evaluated at read time against<br/>accessExpiresAt, never a stored boolean.
+    W-->>App: proActive, status, accessExpiresAt
+```
+
+---
+
 ## Setup
 
 ### 1. Get the code
