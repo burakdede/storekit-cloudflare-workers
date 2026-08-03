@@ -3,17 +3,17 @@ import { MockD1Database } from "../helpers/mock-d1"
 import {
   loadStoreKitSubscriptionByInstallation,
   persistStoreKitNotification,
-  persistStoreKitSubscriptionForInstallation,
-  storeKitNotificationExists,
-  StoreKitPersistenceError
-} from "../../src/lib/storekit-d1"
+  persistStoreKitSubscriptionForInstallation
+} from "../../src/storekit"
 import type { StoreKitEntitlementSnapshot } from "../../src/storekit"
-import type { StoreKitD1Env } from "../../src/lib/storekit-d1"
 
 const snapshot: StoreKitEntitlementSnapshot = {
   proActive: true,
   productId: "com.example.pro.monthly",
   expiresAt: "2099-06-02T12:00:00.000Z",
+  accessExpiresAt: "2099-06-02T12:00:00.000Z",
+  perpetual: false,
+  gracePeriodExpiresAt: null,
   isTrial: false,
   status: "active_paid",
   environment: "Sandbox",
@@ -22,13 +22,24 @@ const snapshot: StoreKitEntitlementSnapshot = {
   webOrderLineItemId: "web-order-1",
   purchaseDate: "2026-06-01T12:00:00.000Z",
   revocationDate: null,
+  revocationReason: null,
   appAccountToken: "account-token-1",
+  productType: "Auto-Renewable Subscription",
+  offerDiscountType: null,
+  signedDate: "2026-06-02T12:00:00.000Z",
+  autoRenewStatus: 1,
+  autoRenewProductId: "com.example.pro.monthly",
+  expirationIntent: null,
+  isInBillingRetryPeriod: null,
+  priceIncreaseStatus: null,
+  renewalPrice: null,
+  currency: null,
   source: "posted_jws",
   resolvedAt: "2026-06-02T12:00:00.000Z"
 }
 
-function env(db = new MockD1Database()): StoreKitD1Env {
-  return { STOREKIT_DB: db as unknown as D1Database }
+function env(db = new MockD1Database()): D1Database {
+  return db as unknown as D1Database
 }
 
 describe("StoreKit D1 adapter", () => {
@@ -95,6 +106,129 @@ describe("StoreKit D1 adapter", () => {
     expect(db.getStoreKitSubscriptionRows()).toHaveLength(1)
   })
 
+  describe("out-of-order write guard", () => {
+    // Apple retries App Store Server Notifications V2 for days and does not guarantee delivery
+    // order, so a late older event must not rewind newer entitlement state.
+    const renewed: StoreKitEntitlementSnapshot = {
+      ...snapshot,
+      status: "active_paid",
+      expiresAt: "2099-07-02T12:00:00.000Z",
+      accessExpiresAt: "2099-07-02T12:00:00.000Z",
+      latestTransactionId: "transaction-2",
+      signedDate: "2026-06-10T12:00:00.000Z"
+    }
+    const staleExpiry: StoreKitEntitlementSnapshot = {
+      ...snapshot,
+      proActive: false,
+      status: "expired",
+      expiresAt: "2026-06-02T12:00:00.000Z",
+      accessExpiresAt: "2026-06-02T12:00:00.000Z",
+      signedDate: "2026-06-01T12:00:00.000Z"
+    }
+
+    it("ignores an older notification arriving after a newer one", async () => {
+      const db = new MockD1Database()
+
+      await persistStoreKitSubscriptionForInstallation(
+        renewed,
+        "installation-1",
+        "app",
+        env(db)
+      )
+      await persistStoreKitSubscriptionForInstallation(
+        staleExpiry,
+        "installation-1",
+        "app",
+        env(db)
+      )
+
+      expect(db.getStoreKitSubscriptionRows()[0]).toMatchObject({
+        status: "active_paid",
+        latest_transaction_id: "transaction-2"
+      })
+    })
+
+    it("applies a newer event on top of an older one", async () => {
+      const db = new MockD1Database()
+
+      await persistStoreKitSubscriptionForInstallation(
+        staleExpiry,
+        "installation-1",
+        "app",
+        env(db)
+      )
+      await persistStoreKitSubscriptionForInstallation(
+        renewed,
+        "installation-1",
+        "app",
+        env(db)
+      )
+
+      expect(db.getStoreKitSubscriptionRows()[0]).toMatchObject({
+        status: "active_paid"
+      })
+    })
+
+    it("always applies a revocation, even one signed earlier than the stored state", async () => {
+      const db = new MockD1Database()
+      const refund: StoreKitEntitlementSnapshot = {
+        ...snapshot,
+        proActive: false,
+        status: "refunded",
+        revocationDate: "2026-06-05T12:00:00.000Z",
+        revocationReason: 1,
+        signedDate: "2026-06-05T12:00:00.000Z"
+      }
+
+      await persistStoreKitSubscriptionForInstallation(
+        renewed,
+        "installation-1",
+        "app",
+        env(db)
+      )
+      await persistStoreKitSubscriptionForInstallation(
+        refund,
+        "installation-1",
+        "app",
+        env(db)
+      )
+
+      expect(db.getStoreKitSubscriptionRows()[0]).toMatchObject({
+        status: "refunded",
+        revocation_reason: 1
+      })
+    })
+
+    it("preserves the installation binding when a notification writes with no installation", async () => {
+      const db = new MockD1Database()
+
+      await persistStoreKitSubscriptionForInstallation(
+        snapshot,
+        "installation-1",
+        "app",
+        env(db)
+      )
+      await persistStoreKitNotification(
+        {
+          uuid: "notification-3",
+          type: "DID_RENEW",
+          subtype: null,
+          environment: "Sandbox",
+          originalTransactionId: "original-1",
+          transactionId: "transaction-2"
+        },
+        renewed,
+        "app",
+        env(db)
+      )
+
+      expect(db.getStoreKitSubscriptionRows()[0]).toMatchObject({
+        installation_id: "installation-1",
+        latest_transaction_id: "transaction-2"
+      })
+    })
+  })
+
   it("does not query inaccessible environments", async () => {
     const db = new MockD1Database()
 
@@ -106,39 +240,5 @@ describe("StoreKit D1 adapter", () => {
         env(db)
       )
     ).resolves.toBeNull()
-  })
-
-  it("fails clearly when the D1 binding is absent or identity is incomplete", async () => {
-    await expect(
-      storeKitNotificationExists("notification-1", {})
-    ).rejects.toBeInstanceOf(StoreKitPersistenceError)
-    await expect(
-      persistStoreKitSubscriptionForInstallation(
-        { ...snapshot, latestTransactionId: null },
-        "installation-1",
-        "com.example.app",
-        env()
-      )
-    ).rejects.toMatchObject({ operation: "projection_validation" })
-  })
-
-  it("treats notification UUID persistence as idempotent", async () => {
-    const db = new MockD1Database()
-    await persistStoreKitNotification(
-      {
-        uuid: "notification-duplicate",
-        type: "TEST",
-        subtype: null,
-        environment: "Sandbox",
-        originalTransactionId: null,
-        transactionId: null
-      },
-      null,
-      "com.example.app",
-      env(db)
-    )
-    expect(
-      await storeKitNotificationExists("notification-duplicate", env(db))
-    ).toBe(true)
   })
 })

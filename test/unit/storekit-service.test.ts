@@ -9,9 +9,10 @@ import {
   getStoreKitEntitlement,
   processStoreKitNotification,
   syncStoreKitTransaction
-} from "../../src/lib/storekit-service"
+} from "../../src/storekit"
 import { StoreKitVerificationError } from "../../src/storekit"
 import type * as StoreKitModule from "../../src/storekit"
+import type * as StoreKitVerification from "../../src/storekit/verification"
 
 const transaction: JWSTransactionDecodedPayload = {
   transactionId: "transaction-service-1",
@@ -45,31 +46,46 @@ const verifiedTransaction = {
   verificationSource: "submitted_jws" as const
 }
 
-vi.mock("../../src/storekit", async () => {
-  const actual =
-    await vi.importActual<typeof StoreKitModule>("../../src/storekit")
+const verifiedNotification = {
+  environment: Environment.SANDBOX,
+  notification: {
+    version: "2.0",
+    notificationUUID: "notification-service-1",
+    notificationType: "TEST",
+    data: {
+      environment: Environment.SANDBOX,
+      bundleId: "com.example.app"
+    }
+  },
+  transaction: null,
+  renewalInfo: null,
+  latestSubscription: null
+}
+
+const notificationRuntime = {
+  environment: Environment.SANDBOX,
+  bundleId: "com.example.app",
+  allowedProductIds: new Set(["com.example.pro.monthly"]),
+  allowAppleLookupFallback: true
+} as unknown as StoreKitModule.StoreKitRuntime
+
+vi.mock("../../src/storekit/verification", async () => {
+  const actual = await vi.importActual<typeof StoreKitVerification>(
+    "../../src/storekit/verification"
+  )
   return {
     ...actual,
     verifyStoreKitTransaction: vi.fn(async () => verifiedTransaction),
-    verifyStoreKitNotification: vi.fn(async () => ({
-      environment: Environment.SANDBOX,
-      notification: {
-        version: "2.0",
-        notificationUUID: "notification-service-1",
-        notificationType: "TEST",
-        data: {
-          environment: Environment.SANDBOX,
-          bundleId: "com.example.app"
-        }
-      },
-      transaction: null,
-      latestSubscription: null
-    }))
+    verifyStoreKitNotificationForRuntime: vi.fn(async () => ({
+      verified: verifiedNotification,
+      runtime: notificationRuntime
+    })),
+    verifyStoreKitNotification: vi.fn(async () => verifiedNotification)
   }
 })
 
 function d1Env(db: MockD1Database) {
-  return { STOREKIT_DB: db as unknown as D1Database }
+  return db as unknown as D1Database
 }
 
 describe("StoreKit service orchestration", () => {
@@ -137,16 +153,90 @@ describe("StoreKit service orchestration", () => {
     expect(db.getStoreKitNotificationRows()).toHaveLength(1)
   })
 
-  it("returns replayed for a duplicate notification UUID", async () => {
+  it("treats a replayed notification uuid as already processed", async () => {
     const db = new MockD1Database()
-    const config = { apple: appleConfig, d1: d1Env(db) }
-    await processStoreKitNotification("signed-notification", config)
-    await expect(
-      processStoreKitNotification("signed-notification", config)
-    ).resolves.toMatchObject({
-      processed: true,
-      replayed: true,
-      snapshot: null
+
+    await processStoreKitNotification("signed-notification", {
+      apple: appleConfig,
+      d1: d1Env(db)
+    })
+    const replay = await processStoreKitNotification("signed-notification", {
+      apple: appleConfig,
+      d1: d1Env(db)
+    })
+
+    expect(replay).toMatchObject({ processed: true, replayed: true })
+    expect(db.getStoreKitNotificationRows()).toHaveLength(1)
+  })
+
+  it("judges a stored grace-period record active past its subscription expiry", async () => {
+    const db = new MockD1Database()
+    db.seedStoreKitSubscription({
+      original_transaction_id: "original-grace",
+      environment: "Sandbox",
+      installation_id: "installation-1",
+      app_account_token: null,
+      latest_transaction_id: "transaction-grace",
+      app_bundle_id: "com.example.app",
+      product_id: "com.example.pro.monthly",
+      status: "grace_period",
+      expires_at: "2026-05-25T12:00:00.000Z",
+      access_expires_at: "2099-06-09T12:00:00.000Z",
+      grace_period_expires_at: "2099-06-09T12:00:00.000Z",
+      is_trial: 0,
+      revocation_date: null,
+      last_verified_at: "2026-06-01T12:00:00.000Z",
+      created_at: "2026-06-01T12:00:00.000Z",
+      updated_at: "2026-06-01T12:00:00.000Z"
+    })
+
+    const result = await getStoreKitEntitlement(
+      "installation-1",
+      ["Sandbox"],
+      { d1: d1Env(db) },
+      new Date("2026-06-02T12:00:00.000Z")
+    )
+
+    expect(result).toMatchObject({
+      proActive: true,
+      status: "grace_period",
+      expiresAt: "2026-05-25T12:00:00.000Z",
+      accessExpiresAt: "2099-06-09T12:00:00.000Z"
+    })
+  })
+
+  it("keeps a perpetual non-consumable record active with no deadline", async () => {
+    const db = new MockD1Database()
+    db.seedStoreKitSubscription({
+      original_transaction_id: "original-lifetime",
+      environment: "Sandbox",
+      installation_id: "installation-1",
+      app_account_token: null,
+      latest_transaction_id: "transaction-lifetime",
+      app_bundle_id: "com.example.app",
+      product_id: "com.example.pro.lifetime",
+      status: "active_paid",
+      expires_at: null,
+      access_expires_at: null,
+      perpetual: 1,
+      is_trial: 0,
+      revocation_date: null,
+      last_verified_at: "2026-06-01T12:00:00.000Z",
+      created_at: "2026-06-01T12:00:00.000Z",
+      updated_at: "2026-06-01T12:00:00.000Z"
+    })
+
+    const result = await getStoreKitEntitlement(
+      "installation-1",
+      ["Sandbox"],
+      { d1: d1Env(db) },
+      new Date("2099-06-02T12:00:00.000Z")
+    )
+
+    expect(result).toMatchObject({
+      proActive: true,
+      status: "active_paid",
+      accessExpiresAt: null
     })
   })
 

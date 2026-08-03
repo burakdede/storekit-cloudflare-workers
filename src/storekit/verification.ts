@@ -1,4 +1,11 @@
+/**
+ * Apple-side StoreKit 2 verification for Cloudflare Workers.
+ *
+ * Every claim this module returns has been checked against an Apple signature and pinned to the
+ * configured bundle id, environment and product allow-list. Nothing a client asserts is trusted.
+ */
 import type {
+  JWSRenewalInfoDecodedPayload,
   JWSTransactionDecodedPayload,
   LastTransactionsItem,
   ResponseBodyV2DecodedPayload,
@@ -6,43 +13,28 @@ import type {
 } from "@apple/app-store-server-library"
 import type * as StoreKitLibrary from "@apple/app-store-server-library"
 import { Buffer } from "buffer"
-import { resolveStoreKitEntitlementCore } from "./lib/storekit-entitlement-core"
-
-export {
-  resolveStoreKitEntitlementCore,
-  type StoreKitEntitlementCandidate,
-  type StoreKitEntitlementInput,
-  type StoreKitEntitlementTransaction
-} from "./lib/storekit-entitlement-core"
-
-const STOREKIT_ENVIRONMENT = {
-  SANDBOX: "Sandbox",
-  PRODUCTION: "Production"
-} as const
-
-const STOREKIT_STATUS = {
-  ACTIVE: 1,
-  EXPIRED: 2,
-  BILLING_RETRY: 3,
-  BILLING_GRACE_PERIOD: 4,
-  REVOKED: 5
-} as const
-
-export type StoreKitEnvironment =
-  typeof STOREKIT_ENVIRONMENT.SANDBOX | typeof STOREKIT_ENVIRONMENT.PRODUCTION
-
-export interface StoreKitEnv {
-  STOREKIT_ALLOWED_ENVIRONMENTS?: string
-  STOREKIT_ALLOW_SANDBOX_PRE_RELEASE?: string
-  STOREKIT_ALLOWED_PRODUCT_IDS?: string
-  STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK?: string
-  STOREKIT_BUNDLE_ID?: string
-  APP_STORE_CONNECT_ISSUER_ID?: string
-  APP_STORE_CONNECT_KEY_ID?: string
-  APP_STORE_CONNECT_PRIVATE_KEY?: string
-  APP_STORE_APP_APPLE_ID?: string
-  APPLE_ROOT_CERTIFICATES_PEM?: string
-}
+import {
+  parseAppleRootCertificatesPem,
+  requiredStoreKitValue,
+  storeKitAllowedProductIds,
+  storeKitAppAppleId,
+  storeKitAppleLookupFallbackEnabled,
+  storeKitConfiguredEnvironments
+} from "./config"
+import { resolveStoreKitEntitlementCore } from "./entitlement"
+import {
+  StoreKitConfigError,
+  StoreKitVerificationError,
+  StoreKitVerificationStageError,
+  type StoreKitVerificationDiagnostics
+} from "./errors"
+import {
+  STOREKIT_ENVIRONMENT,
+  STOREKIT_STATUS,
+  type StoreKitEntitlementSnapshot,
+  type StoreKitEnv,
+  type StoreKitEnvironment
+} from "./types"
 
 export interface VerifiedStoreKitTransaction {
   environment: StoreKitEnvironment
@@ -59,92 +51,18 @@ export interface VerifiedStoreKitTransaction {
 export interface VerifiedStoreKitSubscriptionTransaction {
   status: number | undefined
   transaction: JWSTransactionDecodedPayload
+  renewalInfo?: JWSRenewalInfoDecodedPayload | undefined
 }
 
 export interface VerifiedStoreKitNotification {
   environment: StoreKitEnvironment
   notification: ResponseBodyV2DecodedPayload
   transaction: JWSTransactionDecodedPayload | null
+  renewalInfo: JWSRenewalInfoDecodedPayload | null
   latestSubscription: LastTransactionsItem | null
 }
 
-export type StoreKitEntitlementStatus =
-  | "free"
-  | "active_trial"
-  | "active_paid"
-  | "grace_period"
-  | "billing_retry"
-  | "expired"
-  | "revoked"
-  | "refunded"
-  | "unknown"
-
-export interface StoreKitEntitlementSnapshot {
-  proActive: boolean
-  productId: string | null
-  expiresAt: string | null
-  isTrial: boolean
-  status: StoreKitEntitlementStatus
-  environment: StoreKitEnvironment
-  originalTransactionId: string | null
-  latestTransactionId: string | null
-  webOrderLineItemId: string | null
-  purchaseDate: string | null
-  revocationDate: string | null
-  appAccountToken: string | null
-  source: "posted_jws" | "apple_transaction_lookup" | "app_store_history"
-  resolvedAt: string
-}
-
-export class StoreKitConfigError extends Error {
-  constructor(message = "StoreKit verification is not configured.") {
-    super(message)
-    this.name = "StoreKitConfigError"
-  }
-}
-
-export class StoreKitVerificationError extends Error {
-  readonly stage: string
-  readonly sdkErrorName: string | undefined
-  readonly sdkErrorMessage: string | undefined
-  readonly appleHttpStatus: number | undefined
-  readonly appleApiError: number | undefined
-  readonly appleErrorMessage: string | undefined
-
-  constructor(
-    message = "StoreKit transaction could not be verified.",
-    stage = "unknown",
-    diagnostics: StoreKitVerificationDiagnostics = {}
-  ) {
-    super(message)
-    this.name = "StoreKitVerificationError"
-    this.stage = stage
-    this.sdkErrorName = diagnostics.sdkErrorName
-    this.sdkErrorMessage = diagnostics.sdkErrorMessage
-    this.appleHttpStatus = diagnostics.appleHttpStatus
-    this.appleApiError = diagnostics.appleApiError
-    this.appleErrorMessage = diagnostics.appleErrorMessage
-  }
-}
-
-export interface StoreKitVerificationDiagnostics {
-  sdkErrorName?: string | undefined
-  sdkErrorMessage?: string | undefined
-  appleHttpStatus?: number | undefined
-  appleApiError?: number | undefined
-  appleErrorMessage?: string | undefined
-}
-
-class StoreKitVerificationStageError extends StoreKitVerificationError {
-  constructor(
-    stage: string,
-    message = "StoreKit transaction could not be verified.",
-    diagnostics: StoreKitVerificationDiagnostics = {}
-  ) {
-    super(message, stage, diagnostics)
-  }
-}
-
+/* eslint-disable no-unused-vars -- These structural SDK method signatures intentionally name parameters only for typing. */
 export interface StoreKitRuntime {
   environment: StoreKitEnvironment
   bundleId: string
@@ -163,6 +81,9 @@ export interface StoreKitRuntime {
     verifyAndDecodeNotification: (
       ..._args: [string]
     ) => Promise<ResponseBodyV2DecodedPayload>
+    verifyAndDecodeRenewalInfo: (
+      ..._args: [string]
+    ) => Promise<JWSRenewalInfoDecodedPayload>
   }
 }
 
@@ -177,119 +98,7 @@ type AppleFetchRequestArgs = [
 type AppleServerApiClient = StoreKitRuntime["client"] & {
   makeFetchRequest?: (...args: AppleFetchRequestArgs) => Promise<Response>
 }
-export function parseAppleRootCertificatesPem(
-  rawPem: string | undefined
-): Buffer[] {
-  const trimmed = rawPem?.trim()
-  if (!trimmed) return []
-
-  const matches = trimmed.match(
-    /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g
-  )
-  if (!matches) return []
-
-  return matches.map((pem) => {
-    const base64 = pem
-      .replace("-----BEGIN CERTIFICATE-----", "")
-      .replace("-----END CERTIFICATE-----", "")
-      .replace(/\s+/g, "")
-    return Buffer.from(base64, "base64")
-  })
-}
-
-export function storeKitAllowedProductIds(env: StoreKitEnv): Set<string> {
-  const raw = env.STOREKIT_ALLOWED_PRODUCT_IDS?.trim()
-  if (!raw) return new Set()
-  return new Set(
-    raw
-      .split(",")
-      .map((productId) => productId.trim())
-      .filter(Boolean)
-  )
-}
-
-export function storeKitSandboxPreReleaseEnabled(env: StoreKitEnv): boolean {
-  const raw = env.STOREKIT_ALLOW_SANDBOX_PRE_RELEASE?.trim().toLowerCase()
-  return raw === "true" || raw === "1" || raw === "yes"
-}
-
-/** Return whether a verified submitted JWS may be used when an Apple lookup is unavailable. */
-export function storeKitAppleLookupFallbackEnabled(env: StoreKitEnv): boolean {
-  const raw = env.STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK?.trim().toLowerCase()
-  return raw !== "false" && raw !== "0" && raw !== "no" && raw !== "off"
-}
-
-export function storeKitConfiguredEnvironments(
-  env: StoreKitEnv
-): StoreKitEnvironment[] {
-  const values = new Set(
-    (env.STOREKIT_ALLOWED_ENVIRONMENTS ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean)
-  )
-
-  if (values.size === 0) {
-    throw new StoreKitConfigError(
-      "At least one StoreKit environment must be configured."
-    )
-  }
-
-  for (const value of values) {
-    if (
-      value !== STOREKIT_ENVIRONMENT.SANDBOX &&
-      value !== STOREKIT_ENVIRONMENT.PRODUCTION
-    ) {
-      throw new StoreKitConfigError("Unsupported StoreKit environment.")
-    }
-  }
-
-  const environments: StoreKitEnvironment[] = []
-  if (values.has(STOREKIT_ENVIRONMENT.PRODUCTION)) {
-    environments.push(STOREKIT_ENVIRONMENT.PRODUCTION)
-  }
-  if (values.has(STOREKIT_ENVIRONMENT.SANDBOX)) {
-    environments.push(STOREKIT_ENVIRONMENT.SANDBOX)
-  }
-  return environments
-}
-
-export function storeKitConfiguredEnvironment(
-  env: StoreKitEnv
-): StoreKitEnvironment {
-  return (
-    storeKitConfiguredEnvironments(env)[0] ?? STOREKIT_ENVIRONMENT.PRODUCTION
-  )
-}
-
-/* v8 ignore start -- Apple verifier construction requires runtime secrets and real Apple cert material. */
-function requiredStoreKitValue(
-  value: string | undefined,
-  name: string
-): string {
-  const trimmed = value?.trim()
-  if (!trimmed) throw new StoreKitConfigError(`${name} is required.`)
-  return trimmed
-}
-
-function optionalAppAppleId(
-  env: StoreKitEnv,
-  environment: StoreKitEnvironment
-): number | undefined {
-  if (environment === STOREKIT_ENVIRONMENT.SANDBOX) return undefined
-  const raw = requiredStoreKitValue(
-    env.APP_STORE_APP_APPLE_ID,
-    "APP_STORE_APP_APPLE_ID"
-  )
-  const parsed = Number(raw)
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new StoreKitConfigError(
-      "APP_STORE_APP_APPLE_ID must be a positive integer."
-    )
-  }
-  return parsed
-}
-/* v8 ignore stop */
+/* eslint-enable no-unused-vars */
 
 /* v8 ignore start -- Apple SDK verifier/client wiring requires Apple-signed JWS fixtures. */
 async function loadStoreKitLibrary(): Promise<typeof StoreKitLibrary> {
@@ -357,7 +166,12 @@ async function buildStoreKitRuntime(
       headers
     }
     if (requestBody !== undefined) {
-      init.body = new TextEncoder().encode(requestBody.toString()).buffer
+      // Workers `fetch` accepts no Node Buffer, so a body is narrowed by `typeof` rather than by
+      // `instanceof Buffer`, which does not narrow reliably across @types/node versions.
+      init.body =
+        typeof requestBody === "string"
+          ? requestBody
+          : new Uint8Array(requestBody)
     }
     return fetch(`${urlBase}${path}?${parsedQueryParameters}`, init)
   }
@@ -376,12 +190,12 @@ async function buildStoreKitRuntime(
       false,
       sdkEnvironment,
       bundleId,
-      optionalAppAppleId(env, environment)
+      storeKitAppAppleId(env, environment)
     )
   }
 }
 
-async function buildStoreKitRuntimes(
+export async function buildStoreKitRuntimes(
   env: StoreKitEnv
 ): Promise<StoreKitRuntime[]> {
   const environments = storeKitConfiguredEnvironments(env)
@@ -422,6 +236,56 @@ function assertVerifiedTransactionAllowed(
       "StoreKit transaction product is not allowed."
     )
   }
+}
+
+function assertVerifiedRenewalInfoAllowed(
+  renewalInfo: JWSRenewalInfoDecodedPayload,
+  runtime: StoreKitRuntime,
+  originalTransactionId: string,
+  stage: string
+): void {
+  if (renewalInfo.originalTransactionId !== originalTransactionId) {
+    throw new StoreKitVerificationStageError(
+      stage,
+      "Apple renewal info identity mismatch."
+    )
+  }
+  if (
+    renewalInfo.environment !== undefined &&
+    renewalInfo.environment !== runtime.environment
+  ) {
+    throw new StoreKitVerificationStageError(
+      stage,
+      "Apple renewal info environment is not allowed."
+    )
+  }
+}
+
+/**
+ * Renewal info carries `gracePeriodExpiresDate`, `autoRenewStatus` and `expirationIntent`, none of
+ * which exist on the transaction payload. It is verified and identity-checked exactly like a
+ * transaction JWS before the policy kernel is allowed to read it.
+ */
+async function verifyRenewalInfo(
+  signedRenewalInfo: string,
+  runtime: StoreKitRuntime,
+  originalTransactionId: string,
+  stage: string
+): Promise<JWSRenewalInfoDecodedPayload> {
+  let renewalInfo: JWSRenewalInfoDecodedPayload
+  try {
+    renewalInfo =
+      await runtime.verifier.verifyAndDecodeRenewalInfo(signedRenewalInfo)
+  } catch (error) {
+    throw storeKitVerificationStageError(stage, error)
+  }
+  assertVerifiedRenewalInfoAllowed(
+    renewalInfo,
+    runtime,
+    originalTransactionId,
+    stage
+  )
+  return renewalInfo
 }
 
 function matchingSubscriptionItems(
@@ -499,6 +363,113 @@ function storeKitVerificationStageError(
     "StoreKit transaction could not be verified.",
     storeKitErrorDiagnostics(error)
   )
+}
+
+export interface StoreKitSubscriptionState {
+  statusResponse: StatusResponse
+  latestSubscription: LastTransactionsItem | null
+  subscriptionTransactions: VerifiedStoreKitSubscriptionTransaction[]
+  diagnostics?: StoreKitVerificationDiagnostics | undefined
+}
+
+/**
+ * Read Apple's authoritative subscription state for an original transaction id.
+ *
+ * `Get All Subscription Statuses` is the only source that reflects renewals, cancellations,
+ * billing retry and grace periods as they stand right now, so both transaction sync and
+ * notification processing reconcile against it. Every signed entry it returns is independently
+ * verified and pinned to the same original transaction id before the policy kernel sees it.
+ *
+ * When the lookup fails and `allowAppleLookupFallback` is enabled, the caller is left with an
+ * empty status set and resolves the entitlement from already-verified signed claims instead.
+ */
+export async function lookupStoreKitSubscriptionState(
+  originalTransactionId: string,
+  runtime: StoreKitRuntime
+): Promise<StoreKitSubscriptionState> {
+  const subscriptionTransactions: VerifiedStoreKitSubscriptionTransaction[] = []
+  try {
+    const statusResponse = await runtime.client.getAllSubscriptionStatuses(
+      originalTransactionId
+    )
+    if (
+      statusResponse.environment !== runtime.environment ||
+      statusResponse.bundleId !== runtime.bundleId
+    ) {
+      throw new StoreKitVerificationStageError(
+        "apple_subscription_status_claims",
+        "Apple subscription status response is not allowed."
+      )
+    }
+    const matchingSubscriptions = matchingSubscriptionItems(
+      statusResponse,
+      originalTransactionId
+    )
+    for (const subscription of matchingSubscriptions) {
+      if (!subscription.signedTransactionInfo) continue
+      let subscriptionTransaction: JWSTransactionDecodedPayload
+      try {
+        subscriptionTransaction =
+          await runtime.verifier.verifyAndDecodeTransaction(
+            subscription.signedTransactionInfo
+          )
+      } catch (error) {
+        throw storeKitVerificationStageError(
+          "apple_subscription_transaction_jws_decode",
+          error
+        )
+      }
+      assertVerifiedTransactionAllowed(
+        subscriptionTransaction,
+        runtime,
+        "apple_subscription_transaction_claims"
+      )
+      if (
+        subscriptionTransaction.originalTransactionId !== originalTransactionId
+      ) {
+        throw new StoreKitVerificationStageError(
+          "apple_subscription_transaction_claims",
+          "Apple subscription transaction identity mismatch."
+        )
+      }
+      const renewalInfo = subscription.signedRenewalInfo
+        ? await verifyRenewalInfo(
+            subscription.signedRenewalInfo,
+            runtime,
+            originalTransactionId,
+            "apple_subscription_renewal_info_claims"
+          )
+        : undefined
+      subscriptionTransactions.push({
+        status: subscription.status,
+        transaction: subscriptionTransaction,
+        renewalInfo
+      })
+    }
+    return {
+      statusResponse,
+      latestSubscription: matchingSubscriptions[0] ?? null,
+      subscriptionTransactions
+    }
+  } catch (error) {
+    if (error instanceof StoreKitVerificationError) {
+      throw error
+    }
+    const diagnostics = storeKitErrorDiagnostics(error)
+    if (!runtime.allowAppleLookupFallback) {
+      throw new StoreKitVerificationStageError(
+        "apple_subscription_status_lookup",
+        "Apple subscription status lookup is unavailable.",
+        diagnostics
+      )
+    }
+    return {
+      statusResponse: fallbackStatusResponse(runtime),
+      latestSubscription: null,
+      subscriptionTransactions: [],
+      diagnostics: hasStoreKitDiagnostics(diagnostics) ? diagnostics : undefined
+    }
+  }
 }
 
 export async function verifyStoreKitTransactionWithRuntime(
@@ -587,90 +558,20 @@ export async function verifyStoreKitTransactionWithRuntime(
       )
     }
 
-    let statusResponse: StatusResponse = fallbackStatusResponse(runtime)
-    let latestSubscription: LastTransactionsItem | null = null
-    let subscriptionTransactions: VerifiedStoreKitSubscriptionTransaction[] = []
-    let subscriptionStatusLookupDiagnostics:
-      StoreKitVerificationDiagnostics | undefined
-    try {
-      statusResponse = await runtime.client.getAllSubscriptionStatuses(
-        originalTransactionId
-      )
-      if (
-        statusResponse.environment !== runtime.environment ||
-        statusResponse.bundleId !== runtime.bundleId
-      ) {
-        throw new StoreKitVerificationStageError(
-          "apple_subscription_status_claims",
-          "Apple subscription status response is not allowed."
-        )
-      }
-      const matchingSubscriptions = matchingSubscriptionItems(
-        statusResponse,
-        originalTransactionId
-      )
-      latestSubscription = matchingSubscriptions[0] ?? null
-      for (const subscription of matchingSubscriptions) {
-        if (!subscription.signedTransactionInfo) continue
-        let subscriptionTransaction: JWSTransactionDecodedPayload
-        try {
-          subscriptionTransaction =
-            await runtime.verifier.verifyAndDecodeTransaction(
-              subscription.signedTransactionInfo
-            )
-        } catch (error) {
-          throw storeKitVerificationStageError(
-            "apple_subscription_transaction_jws_decode",
-            error
-          )
-        }
-        assertVerifiedTransactionAllowed(
-          subscriptionTransaction,
-          runtime,
-          "apple_subscription_transaction_claims"
-        )
-        if (
-          subscriptionTransaction.originalTransactionId !==
-          originalTransactionId
-        ) {
-          throw new StoreKitVerificationStageError(
-            "apple_subscription_transaction_claims",
-            "Apple subscription transaction identity mismatch."
-          )
-        }
-        subscriptionTransactions.push({
-          status: subscription.status,
-          transaction: subscriptionTransaction
-        })
-      }
-    } catch (error) {
-      if (error instanceof StoreKitVerificationError) {
-        throw error
-      }
-      const diagnostics = storeKitErrorDiagnostics(error)
-      if (!runtime.allowAppleLookupFallback) {
-        throw new StoreKitVerificationStageError(
-          "apple_subscription_status_lookup",
-          "Apple subscription status lookup is unavailable.",
-          diagnostics
-        )
-      }
-      subscriptionStatusLookupDiagnostics = hasStoreKitDiagnostics(diagnostics)
-        ? diagnostics
-        : undefined
-      statusResponse = fallbackStatusResponse(runtime)
-      latestSubscription = null
-    }
+    const subscriptionState = await lookupStoreKitSubscriptionState(
+      originalTransactionId,
+      runtime
+    )
 
     return {
       environment: runtime.environment,
       transaction: authoritativeTransaction,
-      statusResponse,
-      latestSubscription,
-      subscriptionTransactions,
+      statusResponse: subscriptionState.statusResponse,
+      latestSubscription: subscriptionState.latestSubscription,
+      subscriptionTransactions: subscriptionState.subscriptionTransactions,
       verificationSource,
       transactionLookupDiagnostics,
-      subscriptionStatusLookupDiagnostics
+      subscriptionStatusLookupDiagnostics: subscriptionState.diagnostics
     }
   } catch (error) {
     if (
@@ -734,19 +635,23 @@ function hasExactlyOneStoreKitNotificationPayloadPart(
   )
 }
 
-export async function verifyStoreKitTransaction(
-  signedTransactionJWS: string,
-  env: StoreKitEnv
-): Promise<VerifiedStoreKitTransaction> {
-  const runtimes = await buildStoreKitRuntimes(env)
+/**
+ * Try each configured environment in turn, keeping the runtime that succeeded.
+ *
+ * A production-signed and a sandbox-signed JWS are indistinguishable before decoding, so the only
+ * way to place a payload is to attempt verification per environment. Only failures that mean
+ * "wrong environment" are retried; a claims violation inside the right environment is fatal.
+ */
+async function verifyAcrossStoreKitRuntimes<T>(
+  runtimes: StoreKitRuntime[],
+  // eslint-disable-next-line no-unused-vars -- Structural callback signature names its parameter only for typing.
+  verify: (_runtime: StoreKitRuntime) => Promise<T>
+): Promise<{ value: T; runtime: StoreKitRuntime }> {
   let lastError: StoreKitVerificationError | StoreKitConfigError | undefined
 
   for (const runtime of runtimes) {
     try {
-      return await verifyStoreKitTransactionWithRuntime(
-        signedTransactionJWS,
-        runtime
-      )
+      return { value: await verify(runtime), runtime }
     } catch (error) {
       if (
         error instanceof StoreKitVerificationError ||
@@ -761,6 +666,17 @@ export async function verifyStoreKitTransaction(
   }
 
   throw lastError ?? new StoreKitVerificationError()
+}
+
+export async function verifyStoreKitTransaction(
+  signedTransactionJWS: string,
+  env: StoreKitEnv
+): Promise<VerifiedStoreKitTransaction> {
+  const runtimes = await buildStoreKitRuntimes(env)
+  const { value } = await verifyAcrossStoreKitRuntimes(runtimes, (runtime) =>
+    verifyStoreKitTransactionWithRuntime(signedTransactionJWS, runtime)
+  )
+  return value
 }
 
 export async function verifyStoreKitNotificationWithRuntime(
@@ -799,6 +715,7 @@ export async function verifyStoreKitNotificationWithRuntime(
       )
     }
     let transaction: JWSTransactionDecodedPayload | null = null
+    let renewalInfo: JWSRenewalInfoDecodedPayload | null = null
     let latestSubscription: LastTransactionsItem | null = null
     if (notification.data?.signedTransactionInfo) {
       try {
@@ -822,6 +739,14 @@ export async function verifyStoreKitNotificationWithRuntime(
           "StoreKit notification transaction identity is incomplete."
         )
       }
+      if (notification.data.signedRenewalInfo) {
+        renewalInfo = await verifyRenewalInfo(
+          notification.data.signedRenewalInfo,
+          runtime,
+          transaction.originalTransactionId,
+          "notification_renewal_info_claims"
+        )
+      }
       if (notification.data.status !== undefined) {
         latestSubscription = {
           status: notification.data.status,
@@ -839,6 +764,7 @@ export async function verifyStoreKitNotificationWithRuntime(
       environment: runtime.environment,
       notification,
       transaction,
+      renewalInfo,
       latestSubscription
     }
   } catch (error) {
@@ -862,30 +788,35 @@ export async function verifyStoreKitNotificationWithRuntime(
   }
 }
 
+/**
+ * Verify a notification and hand back the runtime that accepted it, so the caller can reconcile
+ * against Apple with the same credentials and environment the payload was signed for.
+ */
+export async function verifyStoreKitNotificationForRuntime(
+  signedPayload: string,
+  env: StoreKitEnv
+): Promise<{
+  verified: VerifiedStoreKitNotification
+  runtime: StoreKitRuntime
+}> {
+  const runtimes = await buildStoreKitRuntimes(env)
+  const { value, runtime } = await verifyAcrossStoreKitRuntimes(
+    runtimes,
+    (candidate) =>
+      verifyStoreKitNotificationWithRuntime(signedPayload, candidate)
+  )
+  return { verified: value, runtime }
+}
+
 export async function verifyStoreKitNotification(
   signedPayload: string,
   env: StoreKitEnv
 ): Promise<VerifiedStoreKitNotification> {
-  const runtimes = await buildStoreKitRuntimes(env)
-  let lastError: StoreKitVerificationError | StoreKitConfigError | undefined
-
-  for (const runtime of runtimes) {
-    try {
-      return await verifyStoreKitNotificationWithRuntime(signedPayload, runtime)
-    } catch (error) {
-      if (
-        error instanceof StoreKitVerificationError ||
-        error instanceof StoreKitConfigError
-      ) {
-        lastError = error
-      }
-      if (!isRetryableStoreKitEnvironmentError(error)) {
-        throw error
-      }
-    }
-  }
-
-  throw lastError ?? new StoreKitVerificationError()
+  const { verified } = await verifyStoreKitNotificationForRuntime(
+    signedPayload,
+    env
+  )
+  return verified
 }
 /* v8 ignore stop */
 
@@ -911,15 +842,20 @@ export function resolveStoreKitEntitlement(
   now = new Date(),
   allowGracePeriodAccess = true
 ): StoreKitEntitlementSnapshot {
+  const latestRenewalInfo = verified.subscriptionTransactions.find(
+    (candidate) => candidate.renewalInfo
+  )?.renewalInfo
   return resolveStoreKitEntitlementCore(
     {
       environment: verified.environment,
       transaction: verified.transaction,
       latestSubscriptionStatus: verified.latestSubscription?.status,
+      latestRenewalInfo,
       subscriptionTransactions: verified.subscriptionTransactions.map(
         (candidate) => ({
           status: candidate.status,
           transaction: candidate.transaction,
+          renewalInfo: candidate.renewalInfo,
           source: "app_store_history"
         })
       ),

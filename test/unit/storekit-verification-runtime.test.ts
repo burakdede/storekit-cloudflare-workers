@@ -39,7 +39,8 @@ function runtime(
     },
     verifier: {
       verifyAndDecodeTransaction: vi.fn(async () => submittedTransaction),
-      verifyAndDecodeNotification: vi.fn()
+      verifyAndDecodeNotification: vi.fn(),
+      verifyAndDecodeRenewalInfo: vi.fn()
     }
   }
 }
@@ -154,6 +155,87 @@ describe("StoreKit verification runtime boundary", () => {
       )
     }
   )
+
+  describe("renewal info", () => {
+    function subscriptionStatusRuntime(): StoreKitRuntime {
+      const verificationRuntime = runtime()
+      verificationRuntime.client.getAllSubscriptionStatuses = vi.fn(
+        async () => ({
+          environment: Environment.SANDBOX,
+          bundleId: "com.example.app",
+          data: [
+            {
+              subscriptionGroupIdentifier: "group-1",
+              lastTransactions: [
+                {
+                  status: 4,
+                  originalTransactionId: "original-1",
+                  signedTransactionInfo: "apple-subscription-jws",
+                  signedRenewalInfo: "apple-renewal-jws"
+                }
+              ]
+            }
+          ]
+        })
+      )
+      return verificationRuntime
+    }
+
+    it("verifies renewal info and carries the grace deadline into the result", async () => {
+      const verificationRuntime = subscriptionStatusRuntime()
+      const gracePeriodExpiresDate = Date.parse("2099-06-09T12:00:00.000Z")
+      verificationRuntime.verifier.verifyAndDecodeRenewalInfo = vi.fn(
+        async () => ({
+          originalTransactionId: "original-1",
+          environment: Environment.SANDBOX,
+          gracePeriodExpiresDate,
+          autoRenewStatus: 1
+        })
+      )
+
+      const result = await verifyStoreKitTransactionWithRuntime(
+        "signed-jws",
+        verificationRuntime
+      )
+
+      expect(result.subscriptionTransactions[0]?.renewalInfo).toMatchObject({
+        gracePeriodExpiresDate,
+        autoRenewStatus: 1
+      })
+    })
+
+    it("rejects renewal info bound to a different original transaction", async () => {
+      const verificationRuntime = subscriptionStatusRuntime()
+      verificationRuntime.verifier.verifyAndDecodeRenewalInfo = vi.fn(
+        async () => ({
+          originalTransactionId: "different-original",
+          environment: Environment.SANDBOX
+        })
+      )
+
+      await expect(
+        verifyStoreKitTransactionWithRuntime("signed-jws", verificationRuntime)
+      ).rejects.toMatchObject({
+        stage: "apple_subscription_renewal_info_claims"
+      })
+    })
+
+    it("rejects renewal info signed for a different environment", async () => {
+      const verificationRuntime = subscriptionStatusRuntime()
+      verificationRuntime.verifier.verifyAndDecodeRenewalInfo = vi.fn(
+        async () => ({
+          originalTransactionId: "original-1",
+          environment: Environment.PRODUCTION
+        })
+      )
+
+      await expect(
+        verifyStoreKitTransactionWithRuntime("signed-jws", verificationRuntime)
+      ).rejects.toMatchObject({
+        stage: "apple_subscription_renewal_info_claims"
+      })
+    })
+  })
 
   it("requires a version 2 notification and allowed app identity", async () => {
     const verificationRuntime = runtime()

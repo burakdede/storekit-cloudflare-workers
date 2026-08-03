@@ -3,32 +3,40 @@
  *
  * Authentication, HTTP responses, logging, and environment policy belong to the caller. This
  * service combines Apple verification, entitlement policy, and the D1 adapter so a Worker can use
- * the module without importing this repository's mobile-session routes.
+ * the module through one call per operation.
  */
+import { resolveStoreKitEntitlementCore } from "./entitlement"
+import { StoreKitVerificationError } from "./errors"
+import type { StoreKitEntitlementSnapshot, StoreKitEnv } from "./types"
 import {
+  lookupStoreKitSubscriptionState,
   resolveStoreKitEntitlement,
-  StoreKitVerificationError,
-  verifyStoreKitNotification,
+  verifyStoreKitNotificationForRuntime,
   verifyStoreKitTransaction,
-  type StoreKitEnv,
-  type StoreKitEntitlementSnapshot,
+  type StoreKitRuntime,
   type VerifiedStoreKitNotification,
   type VerifiedStoreKitTransaction
-} from "../storekit"
+} from "./verification"
 import {
   loadStoreKitSubscriptionByInstallation,
   persistStoreKitNotification,
   persistStoreKitSubscriptionForInstallation,
   storeKitNotificationExists,
-  type StoreKitD1Env,
+  type StoreKitDatabase,
   type StoreKitSubscriptionRecord
-} from "./storekit-d1"
+} from "./storage"
 
 export interface StoreKitServiceConfig {
   apple: StoreKitEnv
-  d1: StoreKitD1Env
+  /** The D1 binding to persist into, e.g. `env.STOREKIT_DB`. */
+  d1: StoreKitDatabase
   allowGracePeriodAccess?: boolean
   sandboxAllowed?: boolean
+  /**
+   * Re-read `Get All Subscription Statuses` when a notification arrives instead of projecting the
+   * notification payload alone. Defaults to `true`; see `processStoreKitNotification`.
+   */
+  reconcileNotificationsWithApple?: boolean
   now?: Date
 }
 
@@ -49,6 +57,8 @@ export interface StoreKitNotificationProcessResult {
   processed: boolean
   replayed: boolean
   snapshot: StoreKitEntitlementSnapshot | null
+  /** Whether the snapshot came from a fresh Apple status lookup rather than the payload alone. */
+  reconciled: boolean
   verified: VerifiedStoreKitNotification
 }
 
@@ -56,11 +66,41 @@ export interface StoreKitCurrentEntitlement {
   proActive: boolean
   productId: string | null
   expiresAt: string | null
+  accessExpiresAt: string | null
   isTrial: boolean
   status: string
   environment: string
+  autoRenewStatus: number | null
+  autoRenewProductId: string | null
   appAccountToken: string | null
   resolvedAt: string
+}
+
+const ACTIVE_STOREKIT_STATUSES = new Set([
+  "active_trial",
+  "active_paid",
+  "grace_period"
+])
+
+/**
+ * Re-evaluate a stored projection at read time.
+ *
+ * Access is judged against `access_expires_at`, which already accounts for a billing grace period
+ * extending past the subscription's own expiry; a perpetual (non-consumable) row has no deadline
+ * at all and stays active until it is revoked.
+ */
+export function isStoreKitRecordActive(
+  record: Pick<
+    StoreKitSubscriptionRecord,
+    "status" | "accessExpiresAt" | "perpetual"
+  >,
+  now: Date
+): boolean {
+  if (!ACTIVE_STOREKIT_STATUSES.has(record.status)) return false
+  if (record.perpetual === true || record.perpetual === 1) return true
+  if (!record.accessExpiresAt) return false
+  const deadline = Date.parse(record.accessExpiresAt)
+  return Number.isFinite(deadline) && deadline > now.getTime()
 }
 
 export async function syncStoreKitTransaction(
@@ -128,11 +168,86 @@ export async function syncStoreKitTransaction(
   return { snapshot, verified }
 }
 
+/**
+ * Resolve the entitlement a notification implies.
+ *
+ * The notification payload is a point-in-time snapshot that Apple may deliver late, out of order,
+ * or more than once, so by default the current state is re-read from `Get All Subscription
+ * Statuses` and the payload is used only as a fallback when that lookup is unavailable. This is
+ * also what lets a `REFUND` or `REVOKE` revoke access even though those payloads carry no
+ * subscription `status` field — the revocation date on the signed transaction is enough.
+ */
+async function resolveNotificationSnapshot(
+  verified: VerifiedStoreKitNotification,
+  runtime: StoreKitRuntime,
+  config: StoreKitServiceConfig
+): Promise<{
+  snapshot: StoreKitEntitlementSnapshot | null
+  reconciled: boolean
+}> {
+  const transaction = verified.transaction
+  if (!transaction) return { snapshot: null, reconciled: false }
+
+  const allowGracePeriodAccess = config.allowGracePeriodAccess ?? true
+  const originalTransactionId = transaction.originalTransactionId
+  if (
+    originalTransactionId &&
+    config.reconcileNotificationsWithApple !== false
+  ) {
+    const state = await lookupStoreKitSubscriptionState(
+      originalTransactionId,
+      runtime
+    )
+    if (state.subscriptionTransactions.length > 0) {
+      return {
+        snapshot: resolveStoreKitEntitlement(
+          {
+            environment: verified.environment,
+            transaction,
+            statusResponse: state.statusResponse,
+            latestSubscription: state.latestSubscription,
+            subscriptionTransactions: state.subscriptionTransactions
+          },
+          config.now,
+          allowGracePeriodAccess
+        ),
+        reconciled: true
+      }
+    }
+  }
+
+  return {
+    snapshot: resolveStoreKitEntitlementCore(
+      {
+        environment: verified.environment,
+        transaction,
+        latestSubscriptionStatus: verified.latestSubscription?.status,
+        latestRenewalInfo: verified.renewalInfo ?? undefined,
+        subscriptionTransactions: [
+          {
+            status: verified.latestSubscription?.status,
+            transaction,
+            renewalInfo: verified.renewalInfo ?? undefined,
+            source: "posted_jws"
+          }
+        ],
+        verificationSource: "posted_jws"
+      },
+      config.now,
+      allowGracePeriodAccess
+    ),
+    reconciled: false
+  }
+}
+
 export async function processStoreKitNotification(
   signedPayload: string,
   config: StoreKitServiceConfig
 ): Promise<StoreKitNotificationProcessResult> {
-  const verified = await verifyStoreKitNotification(signedPayload, config.apple)
+  const { verified, runtime } = await verifyStoreKitNotificationForRuntime(
+    signedPayload,
+    config.apple
+  )
   if (verified.environment === "Sandbox" && config.sandboxAllowed === false) {
     throw new StoreKitVerificationError(
       "StoreKit Sandbox notifications are not enabled for this request.",
@@ -149,32 +264,20 @@ export async function processStoreKitNotification(
   }
 
   if (await storeKitNotificationExists(notificationUuid, config.d1)) {
-    return { processed: true, replayed: true, snapshot: null, verified }
+    return {
+      processed: true,
+      replayed: true,
+      snapshot: null,
+      reconciled: false,
+      verified
+    }
   }
 
-  const snapshot =
-    verified.transaction && verified.latestSubscription
-      ? resolveStoreKitEntitlement(
-          {
-            environment: verified.environment,
-            transaction: verified.transaction,
-            statusResponse: {
-              environment: verified.environment,
-              bundleId: verified.transaction.bundleId ?? "",
-              data: []
-            },
-            latestSubscription: verified.latestSubscription,
-            subscriptionTransactions: [
-              {
-                status: verified.latestSubscription.status,
-                transaction: verified.transaction
-              }
-            ]
-          },
-          config.now,
-          config.allowGracePeriodAccess ?? true
-        )
-      : null
+  const { snapshot, reconciled } = await resolveNotificationSnapshot(
+    verified,
+    runtime,
+    config
+  )
 
   await persistStoreKitNotification(
     {
@@ -190,7 +293,7 @@ export async function processStoreKitNotification(
     config.apple.STOREKIT_BUNDLE_ID ?? verified.transaction?.bundleId ?? "",
     config.d1
   )
-  return { processed: true, replayed: false, snapshot, verified }
+  return { processed: true, replayed: false, snapshot, reconciled, verified }
 }
 
 export async function readStoreKitEntitlement(
@@ -224,28 +327,26 @@ export async function getStoreKitEntitlement(
       proActive: false,
       productId: null,
       expiresAt: null,
+      accessExpiresAt: null,
       isTrial: false,
       status: "free",
       environment: readableEnvironments[0] ?? "Sandbox",
+      autoRenewStatus: null,
+      autoRenewProductId: null,
       appAccountToken: null,
       resolvedAt: resolvedAt.toISOString()
     }
   }
-  const expiresAtMillis = record.expiresAt
-    ? Date.parse(record.expiresAt)
-    : Number.NaN
   return {
-    proActive:
-      (record.status === "active_trial" ||
-        record.status === "active_paid" ||
-        record.status === "grace_period") &&
-      Number.isFinite(expiresAtMillis) &&
-      expiresAtMillis > resolvedAt.getTime(),
+    proActive: isStoreKitRecordActive(record, resolvedAt),
     productId: record.productId,
     expiresAt: record.expiresAt,
+    accessExpiresAt: record.accessExpiresAt,
     isTrial: record.isTrial === true || record.isTrial === 1,
     status: record.status,
     environment: record.environment,
+    autoRenewStatus: record.autoRenewStatus,
+    autoRenewProductId: record.autoRenewProductId,
     appAccountToken: record.appAccountToken,
     resolvedAt: resolvedAt.toISOString()
   }

@@ -1,12 +1,10 @@
--- Initial StoreKit D1 schema.
+-- D1 schema for the drop-in StoreKit 2 module.
 --
--- Apply it with Wrangler's migration commands:
---   npx wrangler d1 migrations apply STOREKIT_DB --local
---   npx wrangler d1 migrations apply STOREKIT_DB --remote
+-- Apply it directly when vendoring the module into an existing Worker:
+--   npx wrangler d1 execute <DB_NAME> --remote --file=src/storekit/schema.sql
 --
--- This file is kept byte-identical to src/storekit/schema.sql, which is the copy an adopter
--- applies directly when they vendor the module into an existing Worker rather than using this
--- repository's migration directory. A test asserts the two stay in sync.
+-- This repository also ships it as migrations/0001_storekit.sql for Wrangler's migration
+-- workflow. The two files are byte-identical below this header.
 
 -- Current entitlement projection: one row per subscription (or per non-consumable purchase).
 CREATE TABLE IF NOT EXISTS storekit_subscriptions (

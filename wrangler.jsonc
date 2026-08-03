@@ -2,18 +2,30 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cf-worker-storekit2",
   "main": "src/worker.ts",
+  // The Apple library needs Node built-ins; without this flag the Worker will not build.
   "compatibility_date": "2026-08-03",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "vars": {
+    // Replace every value below with your own. Secrets are NOT set here — use
+    // `wrangler secret put`; see docs/configuration.md.
     "STOREKIT_ALLOWED_ENVIRONMENTS": "Production",
-    "STOREKIT_ALLOWED_PRODUCT_IDS": "com.example.app.pro.monthly",
+    "STOREKIT_ALLOWED_PRODUCT_IDS": "com.example.app.pro.monthly,com.example.app.pro.annual",
     "STOREKIT_BUNDLE_ID": "com.example.app",
+    // Numeric App Store app id. Required whenever Production is allowed, because Apple needs it
+    // to verify production notifications.
+    "APP_STORE_APP_APPLE_ID": "0000000000",
+    // false = deny sync when Apple's API is unreachable; true = fall back to the already
+    // signature-verified transaction claims. See docs/configuration.md for the trade-off.
     "STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK": "false",
-    "STOREKIT_ALLOW_GRACE_PERIOD_ACCESS": "true"
+    // Whether a billing grace period keeps a customer's access. Apple's intent is that it does.
+    "STOREKIT_ALLOW_GRACE_PERIOD_ACCESS": "true",
+    // Re-read Apple's authoritative status on each notification instead of trusting the payload.
+    "STOREKIT_RECONCILE_NOTIFICATIONS": "true"
   },
   "d1_databases": [
     {
+      // Rename this freely; pass your binding through the handler's `database` option.
       "binding": "STOREKIT_DB",
       "database_name": "cf-worker-storekit2",
       "database_id": "00000000-0000-0000-0000-000000000000",
