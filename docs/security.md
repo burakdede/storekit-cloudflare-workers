@@ -12,7 +12,7 @@ environment checks below.
 
 **Authentication is yours.** A StoreKit transaction proves that a purchase happened, never who it
 belongs to. `src/auth.ts` ships returning `null`, so every authenticated route answers 401 until you
-implement it. Never derive identity from a client-supplied header or body field — anyone can send
+implement it. Never derive identity from a client-supplied header or body field; anyone can send
 one and claim another customer's subscription.
 
 ## The verification chain
@@ -27,7 +27,7 @@ Every check happens before any entitlement is persisted:
 4. **Product allow-list.** `productId` must be in `STOREKIT_ALLOWED_PRODUCT_IDS`.
 5. **Transaction identity.** Both `transactionId` and `originalTransactionId` must be present.
 6. **Apple re-lookup.** `Get Transaction Info` is queried and its Apple-signed response _replaces_
-   the client copy — but only after its `originalTransactionId` matches, so a swap is impossible.
+   the client copy, but only after its `originalTransactionId` matches, so a swap is impossible.
 7. **Subscription status.** `Get All Subscription Statuses` is queried; every signed entry it
    returns is independently verified and pinned to the same `originalTransactionId`.
 8. **Renewal info.** `signedRenewalInfo` is verified and identity-pinned the same way before the
@@ -49,7 +49,7 @@ unreachable. Set it to `false` where that is unacceptable.
 ## What is never logged or returned
 
 Raw JWS values, `signedPayload`, the Apple bearer JWT, and the private key never reach logs. Error
-responses are deliberately generic (`"StoreKit transaction could not be verified."`) — the failing
+responses are deliberately generic (`"StoreKit transaction could not be verified."`); the failing
 stage goes to the `onEvent` sink instead, so an attacker probing with forged payloads learns nothing
 about which check rejected them.
 
@@ -69,7 +69,7 @@ already makes duplicate _valid_ notifications cheap.
 
 OCSP checking is disabled because Apple's Node SDK OCSP path calls `Response.buffer()`, which does
 not exist in the Workers runtime. Signature and chain validation are unaffected; what is lost is
-detection of a _revoked_ Apple intermediate certificate — a scenario Apple handles by rotating
+detection of a _revoked_ Apple intermediate certificate, a scenario Apple handles by rotating
 roots, and one the other identity checks above do not depend on.
 
 ## Operational rules

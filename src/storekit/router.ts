@@ -3,7 +3,7 @@
  *
  * This is the "one call" integration: give it your `env`, tell it how to authenticate a request,
  * and mount it. It owns request parsing, Apple verification, entitlement policy, D1 persistence
- * and HTTP status mapping, and it deliberately owns nothing else — authentication is yours,
+ * and HTTP status mapping, and it deliberately owns nothing else: authentication is yours,
  * because only your app knows who a caller is.
  *
  *     const storekit = createStoreKitHandler({
@@ -19,11 +19,7 @@
  *
  * `fetch` returns `null` when the request is not a StoreKit route, so it composes with any router.
  */
-import {
-  StoreKitConfigError,
-  StoreKitPersistenceError,
-  StoreKitVerificationError
-} from "./errors"
+import { StoreKitConfigError, StoreKitPersistenceError, StoreKitVerificationError } from "./errors"
 import {
   getStoreKitEntitlement,
   processStoreKitNotification,
@@ -64,7 +60,7 @@ export const storeKitRoutePaths: StoreKitRoutePaths = {
 /**
  * What the host resolved about the caller.
  *
- * `accountId` is the stable identifier the entitlement is bound to — a user id, an installation
+ * `accountId` is the stable identifier the entitlement is bound to: a user id, an installation
  * id, whatever your app uses. `expectedAppAccountToken` should be set when your client passes an
  * `appAccountToken` on purchase; the module then refuses a transaction minted for a different
  * account, which is what stops a purchase being replayed onto someone else's account.
@@ -80,9 +76,7 @@ export interface StoreKitRequestContext {
 /** Structured log sink. Receives no secrets, no signed payloads and no bearer tokens. */
 export type StoreKitEventSink = (_event: Record<string, unknown>) => void
 
-export interface StoreKitHandlerOptions<
-  TEnv extends StoreKitWorkerEnv = StoreKitWorkerEnv
-> {
+export interface StoreKitHandlerOptions<TEnv extends StoreKitWorkerEnv = StoreKitWorkerEnv> {
   /**
    * Resolve the caller. Return `null` to reject with 401.
    *
@@ -128,17 +122,11 @@ function jsonResponse(body: unknown, status: number): Response {
   })
 }
 
-function errorResponse(
-  status: number,
-  code: string,
-  message: string
-): Response {
+function errorResponse(status: number, code: string, message: string): Response {
   return jsonResponse({ code, message }, status)
 }
 
-async function readJsonBody(
-  request: Request
-): Promise<Record<string, unknown> | null> {
+async function readJsonBody(request: Request): Promise<Record<string, unknown> | null> {
   try {
     const body: unknown = await request.json()
     if (!body || typeof body !== "object" || Array.isArray(body)) return null
@@ -148,11 +136,7 @@ async function readJsonBody(
   }
 }
 
-function readString(
-  body: Record<string, unknown>,
-  key: string,
-  maxLength: number
-): string | null {
+function readString(body: Record<string, unknown>, key: string, maxLength: number): string | null {
   const value = body[key]
   if (typeof value !== "string") return null
   const trimmed = value.trim()
@@ -160,12 +144,9 @@ function readString(
   return trimmed
 }
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-function readAppAccountToken(
-  body: Record<string, unknown>
-): string | null | undefined {
+function readAppAccountToken(body: Record<string, unknown>): string | null | undefined {
   const value = body.appAccountToken
   if (value === undefined || value === null) return undefined
   if (typeof value !== "string" || !UUID_PATTERN.test(value)) return null
@@ -175,25 +156,17 @@ function readAppAccountToken(
 /**
  * Map a module error to a response.
  *
- * Verification failures never explain *why* to the client — the stage travels to logs instead, so
+ * Verification failures never explain *why* to the client; the stage travels to logs instead, so
  * an attacker probing with forged payloads learns nothing about which check rejected them.
  */
-function responseForError(
-  error: unknown,
-  emit: StoreKitEventSink,
-  event: string
-): Response {
+function responseForError(error: unknown, emit: StoreKitEventSink, event: string): Response {
   if (error instanceof StoreKitConfigError) {
     emit({
       level: "error",
       event: `${event}_misconfigured`,
       message: error.message
     })
-    return errorResponse(
-      503,
-      "UPSTREAM_UNAVAILABLE",
-      "StoreKit verification is not configured."
-    )
+    return errorResponse(503, "UPSTREAM_UNAVAILABLE", "StoreKit verification is not configured.")
   }
   if (error instanceof StoreKitVerificationError) {
     emit({
@@ -205,11 +178,7 @@ function responseForError(
       verificationAppleHttpStatus: error.appleHttpStatus,
       verificationAppleApiError: error.appleApiError
     })
-    return errorResponse(
-      400,
-      "VALIDATION_ERROR",
-      "StoreKit transaction could not be verified."
-    )
+    return errorResponse(400, "VALIDATION_ERROR", "StoreKit transaction could not be verified.")
   }
   if (error instanceof StoreKitPersistenceError) {
     emit({
@@ -219,35 +188,17 @@ function responseForError(
       retryable: error.retryable
     })
     return error.retryable
-      ? errorResponse(
-          503,
-          "UPSTREAM_UNAVAILABLE",
-          "Backend storage is temporarily unavailable."
-        )
-      : errorResponse(
-          400,
-          "VALIDATION_ERROR",
-          "StoreKit transaction could not be verified."
-        )
+      ? errorResponse(503, "UPSTREAM_UNAVAILABLE", "Backend storage is temporarily unavailable.")
+      : errorResponse(400, "VALIDATION_ERROR", "StoreKit transaction could not be verified.")
   }
   emit({ level: "error", event: `${event}_failed` })
-  return errorResponse(
-    500,
-    "INTERNAL_ERROR",
-    "StoreKit request could not be completed."
-  )
+  return errorResponse(500, "INTERNAL_ERROR", "StoreKit request could not be completed.")
 }
 
 /* eslint-disable no-unused-vars -- Structural fetch signature names parameters only for typing. */
-export interface StoreKitHandler<
-  TEnv extends StoreKitWorkerEnv = StoreKitWorkerEnv
-> {
+export interface StoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitWorkerEnv> {
   /** Returns `null` when the request does not match a StoreKit route. */
-  fetch: (
-    _request: Request,
-    _env: TEnv,
-    _ctx?: ExecutionContext
-  ) => Promise<Response | null>
+  fetch: (_request: Request, _env: TEnv, _ctx?: ExecutionContext) => Promise<Response | null>
   paths: StoreKitRoutePaths
 }
 
@@ -262,31 +213,26 @@ function defaultDatabase(env: StoreKitWorkerEnv): StoreKitDatabase | undefined {
   return (env as { STOREKIT_DB?: StoreKitDatabase }).STOREKIT_DB
 }
 
-export function createStoreKitHandler<
-  TEnv extends StoreKitWorkerEnv = StoreKitWorkerEnv
->(options: StoreKitHandlerOptions<TEnv>): StoreKitHandler<TEnv> {
+export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitWorkerEnv>(
+  options: StoreKitHandlerOptions<TEnv>
+): StoreKitHandler<TEnv> {
   const paths: StoreKitRoutePaths = { ...storeKitRoutePaths, ...options.paths }
   const emit: StoreKitEventSink = (event) => options.onEvent?.(event)
+  // eslint-disable-next-line no-unused-vars -- Structural callback signature names its parameter only for typing.
   const resolveDatabase: (_env: TEnv) => StoreKitDatabase | undefined =
     options.database ?? defaultDatabase
 
-  function serviceConfig(
-    env: TEnv,
-    context?: StoreKitRequestContext
-  ): StoreKitServiceConfig {
+  function serviceConfig(env: TEnv, context?: StoreKitRequestContext): StoreKitServiceConfig {
     // Code options win over Worker variables; the variables are the zero-code default so a
     // drop-in user configures policy in wrangler.jsonc rather than by editing source.
     const config: StoreKitServiceConfig = {
       apple: env,
       d1: resolveDatabase(env) as StoreKitDatabase,
-      allowGracePeriodAccess:
-        options.allowGracePeriodAccess ?? storeKitAllowGracePeriodAccess(env),
+      allowGracePeriodAccess: options.allowGracePeriodAccess ?? storeKitAllowGracePeriodAccess(env),
       reconcileNotificationsWithApple:
-        options.reconcileNotificationsWithApple ??
-        storeKitReconcileNotifications(env)
+        options.reconcileNotificationsWithApple ?? storeKitReconcileNotifications(env)
     }
-    if (context?.sandboxAllowed !== undefined)
-      config.sandboxAllowed = context.sandboxAllowed
+    if (context?.sandboxAllowed !== undefined) config.sandboxAllowed = context.sandboxAllowed
     return config
   }
 
@@ -296,32 +242,15 @@ export function createStoreKitHandler<
     context: StoreKitRequestContext
   ): Promise<Response> {
     const body = await readJsonBody(request)
-    if (!body)
-      return errorResponse(
-        400,
-        "VALIDATION_ERROR",
-        "Invalid StoreKit sync payload."
-      )
+    if (!body) return errorResponse(400, "VALIDATION_ERROR", "Invalid StoreKit sync payload.")
 
-    const signedTransactionJWS = readString(
-      body,
-      "signedTransactionJWS",
-      MAX_JWS_LENGTH
-    )
+    const signedTransactionJWS = readString(body, "signedTransactionJWS", MAX_JWS_LENGTH)
     if (!signedTransactionJWS) {
-      return errorResponse(
-        400,
-        "VALIDATION_ERROR",
-        "Invalid StoreKit sync payload."
-      )
+      return errorResponse(400, "VALIDATION_ERROR", "Invalid StoreKit sync payload.")
     }
     const appAccountToken = readAppAccountToken(body)
     if (appAccountToken === null) {
-      return errorResponse(
-        400,
-        "VALIDATION_ERROR",
-        "Invalid StoreKit sync payload."
-      )
+      return errorResponse(400, "VALIDATION_ERROR", "Invalid StoreKit sync payload.")
     }
 
     const appBundleId = context.appBundleId ?? env.STOREKIT_BUNDLE_ID ?? ""
@@ -348,10 +277,7 @@ export function createStoreKitHandler<
     return jsonResponse(result.snapshot, 200)
   }
 
-  async function handleEntitlement(
-    env: TEnv,
-    context: StoreKitRequestContext
-  ): Promise<Response> {
+  async function handleEntitlement(env: TEnv, context: StoreKitRequestContext): Promise<Response> {
     const entitlement = await getStoreKitEntitlement(
       context.accountId,
       storeKitConfiguredEnvironments(env),
@@ -365,27 +291,15 @@ export function createStoreKitHandler<
    * transient failure. A payload that fails verification is answered 401 rather than 200 so a
    * forged notification is never silently accepted.
    */
-  async function handleNotification(
-    request: Request,
-    env: TEnv
-  ): Promise<Response> {
+  async function handleNotification(request: Request, env: TEnv): Promise<Response> {
     const body = await readJsonBody(request)
-    const signedPayload = body
-      ? readString(body, "signedPayload", MAX_NOTIFICATION_LENGTH)
-      : null
+    const signedPayload = body ? readString(body, "signedPayload", MAX_NOTIFICATION_LENGTH) : null
     if (!signedPayload) {
-      return errorResponse(
-        400,
-        "VALIDATION_ERROR",
-        "Invalid StoreKit notification payload."
-      )
+      return errorResponse(400, "VALIDATION_ERROR", "Invalid StoreKit notification payload.")
     }
 
     try {
-      const result = await processStoreKitNotification(
-        signedPayload,
-        serviceConfig(env)
-      )
+      const result = await processStoreKitNotification(signedPayload, serviceConfig(env))
       emit({
         level: "info",
         event: result.replayed
@@ -405,11 +319,7 @@ export function createStoreKitHandler<
           event: "storekit_notification_rejected",
           verificationStage: error.stage
         })
-        return errorResponse(
-          401,
-          "UNAUTHORIZED",
-          "StoreKit notification could not be verified."
-        )
+        return errorResponse(401, "UNAUTHORIZED", "StoreKit notification could not be verified.")
       }
       throw error
     }
@@ -434,11 +344,7 @@ export function createStoreKitHandler<
 
         const context = await options.authenticate(request, env)
         if (!context) {
-          return errorResponse(
-            401,
-            "UNAUTHORIZED",
-            "Authentication is required."
-          )
+          return errorResponse(401, "UNAUTHORIZED", "Authentication is required.")
         }
         return isSync
           ? await handleSync(request, env, context)

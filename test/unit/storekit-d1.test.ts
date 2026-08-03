@@ -129,12 +129,7 @@ describe("StoreKit D1 adapter", () => {
     it("ignores an older notification arriving after a newer one", async () => {
       const db = new MockD1Database()
 
-      await persistStoreKitSubscriptionForInstallation(
-        renewed,
-        "installation-1",
-        "app",
-        env(db)
-      )
+      await persistStoreKitSubscriptionForInstallation(renewed, "installation-1", "app", env(db))
       await persistStoreKitSubscriptionForInstallation(
         staleExpiry,
         "installation-1",
@@ -157,12 +152,7 @@ describe("StoreKit D1 adapter", () => {
         "app",
         env(db)
       )
-      await persistStoreKitSubscriptionForInstallation(
-        renewed,
-        "installation-1",
-        "app",
-        env(db)
-      )
+      await persistStoreKitSubscriptionForInstallation(renewed, "installation-1", "app", env(db))
 
       expect(db.getStoreKitSubscriptionRows()[0]).toMatchObject({
         status: "active_paid"
@@ -180,18 +170,8 @@ describe("StoreKit D1 adapter", () => {
         signedDate: "2026-06-05T12:00:00.000Z"
       }
 
-      await persistStoreKitSubscriptionForInstallation(
-        renewed,
-        "installation-1",
-        "app",
-        env(db)
-      )
-      await persistStoreKitSubscriptionForInstallation(
-        refund,
-        "installation-1",
-        "app",
-        env(db)
-      )
+      await persistStoreKitSubscriptionForInstallation(renewed, "installation-1", "app", env(db))
+      await persistStoreKitSubscriptionForInstallation(refund, "installation-1", "app", env(db))
 
       expect(db.getStoreKitSubscriptionRows()[0]).toMatchObject({
         status: "refunded",
@@ -202,12 +182,7 @@ describe("StoreKit D1 adapter", () => {
     it("preserves the installation binding when a notification writes with no installation", async () => {
       const db = new MockD1Database()
 
-      await persistStoreKitSubscriptionForInstallation(
-        snapshot,
-        "installation-1",
-        "app",
-        env(db)
-      )
+      await persistStoreKitSubscriptionForInstallation(snapshot, "installation-1", "app", env(db))
       await persistStoreKitNotification(
         {
           uuid: "notification-3",

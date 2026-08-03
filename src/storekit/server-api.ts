@@ -102,7 +102,7 @@ async function appleApi(
  * Ask Apple to send a test notification to the configured webhook URL.
  *
  * The returned token can be passed to Apple's `getTestNotificationStatus` to see exactly what
- * Apple observed — this is the fastest way to prove a webhook is reachable and verifying.
+ * Apple observed; this is the fastest way to prove a webhook is reachable and verifying.
  */
 export async function requestStoreKitTestNotification(
   env: StoreKitEnv,
@@ -123,10 +123,7 @@ export async function getStoreKitNotificationHistory(
   paginationToken: string | null = null,
   environment?: StoreKitEnvironment
 ): Promise<NotificationHistoryResponse> {
-  return (await appleApi(env, environment)).getNotificationHistory(
-    paginationToken,
-    request
-  )
+  return (await appleApi(env, environment)).getNotificationHistory(paginationToken, request)
 }
 
 /** Full signed transaction history for a customer, newest first by default. */
@@ -137,11 +134,7 @@ export async function getStoreKitTransactionHistory(
   revision: string | null = null,
   environment?: StoreKitEnvironment
 ): Promise<HistoryResponse> {
-  return (await appleApi(env, environment)).getTransactionHistory(
-    transactionId,
-    revision,
-    request
-  )
+  return (await appleApi(env, environment)).getTransactionHistory(transactionId, revision, request)
 }
 
 export async function getStoreKitRefundHistory(
@@ -150,10 +143,7 @@ export async function getStoreKitRefundHistory(
   revision: string | null = null,
   environment?: StoreKitEnvironment
 ): Promise<RefundHistoryResponse> {
-  return (await appleApi(env, environment)).getRefundHistory(
-    transactionId,
-    revision
-  )
+  return (await appleApi(env, environment)).getRefundHistory(transactionId, revision)
 }
 
 /** Resolve a customer-supplied order id from their App Store receipt, for support workflows. */
@@ -196,7 +186,5 @@ export async function sendStoreKitConsumptionInformation(
   request: ConsumptionRequest,
   environment?: StoreKitEnvironment
 ): Promise<void> {
-  await (
-    await appleApi(env, environment)
-  ).sendConsumptionInformation(transactionId, request)
+  await (await appleApi(env, environment)).sendConsumptionInformation(transactionId, request)
 }

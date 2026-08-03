@@ -4,7 +4,7 @@ Drop-in, server-authoritative **StoreKit 2** for **Cloudflare Workers + D1**.
 
 Copy one directory, apply one schema, set four secrets, mount one handler. You get Apple JWS
 verification, a correct entitlement engine, idempotent App Store Server Notifications V2, and the
-operational Apple calls — without writing any of it yourself.
+operational Apple calls, without writing any of it yourself.
 
 ```ts
 import { createStoreKitHandler } from "./storekit"
@@ -18,9 +18,7 @@ const storekit = createStoreKitHandler<Env>({
 
 export default {
   async fetch(request, env, ctx) {
-    return (
-      (await storekit.fetch(request, env, ctx)) ?? myRoutes(request, env, ctx)
-    )
+    return (await storekit.fetch(request, env, ctx)) ?? myRoutes(request, env, ctx)
   }
 }
 ```
@@ -36,7 +34,7 @@ Server-side StoreKit has a handful of details that are easy to get wrong and exp
 This module gets them right, and the tests say so:
 
 **A billing grace period does not mean "expired."** When a renewal fails, Apple keeps serving the
-customer while it retries the payment — but the transaction's own `expiresDate` is already in the
+customer while it retries the payment, but the transaction's own `expiresDate` is already in the
 past. Judge access on `expiresDate` and you cut off paying customers for the entire grace period.
 This module resolves a separate `accessExpiresAt` from the verified `gracePeriodExpiresDate`.
 
@@ -45,7 +43,7 @@ pay-up-front and pay-as-you-go offers. Trials key off `offerDiscountType`.
 
 **Notifications arrive out of order.** Apple does not guarantee delivery order and retries failed
 deliveries for days. A late `DID_RENEW` landing after an `EXPIRED` will rewind your state unless
-writes are guarded — and guarded on _Apple's_ signing time, because a late-arriving old event has a
+writes are guarded, and guarded on _Apple's_ signing time, because a late-arriving old event has a
 newer server clock reading. Revocations bypass the guard, because a refund is terminal.
 
 **`REFUND` carries no subscription status.** Handlers that only act on `data.status` never revoke
@@ -58,20 +56,20 @@ lifetime unlock.
 
 ## What you get
 
-- **Verification** — signature and Apple certificate chain, bundle ID, environment, closed product
+- **Verification**: signature and Apple certificate chain, bundle ID, environment, closed product
   allow-list, transaction identity, and an Apple re-lookup whose response only replaces the client
   copy after its identity claims match.
-- **Entitlement policy** — paid, free trial, grace period, billing retry, expired, revoked,
+- **Entitlement policy**: paid, free trial, grace period, billing retry, expired, revoked,
   refunded, and perpetual, resolved from verified claims only. Pure and I/O-free, so you can test
   your tier rules against plain objects.
-- **Renewal metadata** — auto-renew status and product, expiration intent, billing retry, price
+- **Renewal metadata**: auto-renew status and product, expiration intent, billing retry, price
   increase status, renewal price and currency.
-- **Persistence** — entitlement projection, transaction audit trail, and a notification replay
+- **Persistence**: entitlement projection, transaction audit trail, and a notification replay
   ledger in D1, written in atomic batches.
-- **A mountable handler** — sync, entitlement read, and the Apple webhook, with request validation
+- **A mountable handler**: sync, entitlement read, and the Apple webhook, with request validation
   and error mapping that never leaks which check rejected a payload.
-- **Config validation** — every problem reported at once, secret presence without secret values.
-- **Operational Apple calls** — test notifications, notification-history replay for outage
+- **Config validation**: every problem reported at once, secret presence without secret values.
+- **Operational Apple calls**: test notifications, notification-history replay for outage
   recovery, transaction and refund history, order lookup, renewal-date extension, and consumption
   information for `CONSUMPTION_REQUEST`.
 
@@ -93,7 +91,7 @@ cp -r src/storekit /path/to/your-worker/src/
 npm install @apple/app-store-server-library
 ```
 
-The directory imports nothing outside itself except the Apple library — a test enforces that, so it
+The directory imports nothing outside itself except the Apple library; a test enforces that, so it
 stays copyable.
 
 ### 2. Configure Wrangler
@@ -108,9 +106,7 @@ stays copyable.
     "STOREKIT_ALLOWED_PRODUCT_IDS": "com.example.app.pro.monthly",
     "APP_STORE_APP_APPLE_ID": "1234567890"
   },
-  "d1_databases": [
-    { "binding": "STOREKIT_DB", "database_name": "...", "database_id": "..." }
-  ]
+  "d1_databases": [{ "binding": "STOREKIT_DB", "database_name": "...", "database_id": "..." }]
 }
 ```
 
@@ -132,7 +128,7 @@ npx wrangler secret put APP_STORE_CONNECT_PRIVATE_KEY   # the whole .p8, BEGIN/E
 npx wrangler secret put APPLE_ROOT_CERTIFICATES_PEM     # concatenated Apple roots
 ```
 
-Where each value comes from — and how to convert Apple's root certificates to PEM — is in
+Where each value comes from, and how to convert Apple's root certificates to PEM, is in
 [`docs/configuration.md`](docs/configuration.md).
 
 ### 5. Implement `authenticate`, then deploy
@@ -146,7 +142,7 @@ reporting which secrets are present without ever revealing a value.
 
 ### 6. Point Apple at the webhook
 
-In App Store Connect → your app → **App Information → App Store Server Notifications**, set the
+In App Store Connect > your app > **App Information > App Store Server Notifications**, set the
 **Version 2** URL to `https://your-worker.example.com/storekit/notifications`. Then prove it works:
 
 ```ts
@@ -205,7 +201,7 @@ const { snapshot } = await syncStoreKitTransaction(
 )
 ```
 
-And `resolveStoreKitEntitlementCore` is the pure policy kernel — no Apple SDK, no D1, no HTTP.
+And `resolveStoreKitEntitlementCore` is the pure policy kernel: no Apple SDK, no D1, no HTTP.
 
 ---
 
@@ -227,7 +223,7 @@ V2 including transaction-less events, and both Apple environments simultaneously
 
 **Not covered:** consumable balance ledgers (crediting is app-specific), app-transaction
 verification, OCSP revocation checking (Apple's SDK OCSP path calls `Response.buffer()`, which the
-Workers runtime does not provide — signature and chain validation are unaffected), the Advanced
+Workers runtime does not provide; signature and chain validation are unaffected), the Advanced
 Commerce API, StoreKit 1 receipts, and V1 notifications.
 
 ## Development
@@ -242,4 +238,4 @@ in this repository.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE).

@@ -7,8 +7,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "vars": {
-    // Replace every value below with your own. Secrets are NOT set here — use
-    // `wrangler secret put`; see docs/configuration.md.
+    // Replace every value below with your own. Secrets are NOT set here: use
+    // `wrangler secret put`, and see docs/configuration.md.
     "STOREKIT_ALLOWED_ENVIRONMENTS": "Production",
     "STOREKIT_ALLOWED_PRODUCT_IDS": "com.example.app.pro.monthly,com.example.app.pro.annual",
     "STOREKIT_BUNDLE_ID": "com.example.app",

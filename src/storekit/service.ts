@@ -76,11 +76,7 @@ export interface StoreKitCurrentEntitlement {
   resolvedAt: string
 }
 
-const ACTIVE_STOREKIT_STATUSES = new Set([
-  "active_trial",
-  "active_paid",
-  "grace_period"
-])
+const ACTIVE_STOREKIT_STATUSES = new Set(["active_trial", "active_paid", "grace_period"])
 
 /**
  * Re-evaluate a stored projection at read time.
@@ -90,10 +86,7 @@ const ACTIVE_STOREKIT_STATUSES = new Set([
  * at all and stays active until it is revoked.
  */
 export function isStoreKitRecordActive(
-  record: Pick<
-    StoreKitSubscriptionRecord,
-    "status" | "accessExpiresAt" | "perpetual"
-  >,
+  record: Pick<StoreKitSubscriptionRecord, "status" | "accessExpiresAt" | "perpetual">,
   now: Date
 ): boolean {
   if (!ACTIVE_STOREKIT_STATUSES.has(record.status)) return false
@@ -118,10 +111,7 @@ export async function syncStoreKitTransaction(
     )
   }
 
-  const verified = await verifyStoreKitTransaction(
-    input.signedTransactionJWS,
-    config.apple
-  )
+  const verified = await verifyStoreKitTransaction(input.signedTransactionJWS, config.apple)
   if (input.appBundleId !== config.apple.STOREKIT_BUNDLE_ID) {
     throw new StoreKitVerificationError(
       "StoreKit app bundle does not match the configured bundle.",
@@ -134,10 +124,7 @@ export async function syncStoreKitTransaction(
       "sandbox_pre_release_policy"
     )
   }
-  if (
-    input.appAccountToken &&
-    input.appAccountToken !== verified.transaction.appAccountToken
-  ) {
+  if (input.appAccountToken && input.appAccountToken !== verified.transaction.appAccountToken) {
     throw new StoreKitVerificationError(
       "StoreKit transaction app account token is not allowed.",
       "app_account_token_claims"
@@ -175,7 +162,7 @@ export async function syncStoreKitTransaction(
  * or more than once, so by default the current state is re-read from `Get All Subscription
  * Statuses` and the payload is used only as a fallback when that lookup is unavailable. This is
  * also what lets a `REFUND` or `REVOKE` revoke access even though those payloads carry no
- * subscription `status` field — the revocation date on the signed transaction is enough.
+ * subscription `status` field; the revocation date on the signed transaction is enough.
  */
 async function resolveNotificationSnapshot(
   verified: VerifiedStoreKitNotification,
@@ -190,14 +177,8 @@ async function resolveNotificationSnapshot(
 
   const allowGracePeriodAccess = config.allowGracePeriodAccess ?? true
   const originalTransactionId = transaction.originalTransactionId
-  if (
-    originalTransactionId &&
-    config.reconcileNotificationsWithApple !== false
-  ) {
-    const state = await lookupStoreKitSubscriptionState(
-      originalTransactionId,
-      runtime
-    )
+  if (originalTransactionId && config.reconcileNotificationsWithApple !== false) {
+    const state = await lookupStoreKitSubscriptionState(originalTransactionId, runtime)
     if (state.subscriptionTransactions.length > 0) {
       return {
         snapshot: resolveStoreKitEntitlement(
@@ -273,11 +254,7 @@ export async function processStoreKitNotification(
     }
   }
 
-  const { snapshot, reconciled } = await resolveNotificationSnapshot(
-    verified,
-    runtime,
-    config
-  )
+  const { snapshot, reconciled } = await resolveNotificationSnapshot(verified, runtime, config)
 
   await persistStoreKitNotification(
     {
@@ -285,8 +262,7 @@ export async function processStoreKitNotification(
       type: notificationType,
       subtype: verified.notification.subtype ?? null,
       environment: verified.environment,
-      originalTransactionId:
-        verified.transaction?.originalTransactionId ?? null,
+      originalTransactionId: verified.transaction?.originalTransactionId ?? null,
       transactionId: verified.transaction?.transactionId ?? null
     },
     snapshot,

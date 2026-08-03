@@ -37,8 +37,7 @@ const productionClient = client()
 
 vi.mock("../../src/storekit/verification", async (importOriginal) => {
   const actual = await importOriginal<typeof StoreKitVerification>()
-  const { storeKitConfiguredEnvironments } =
-    await import("../../src/storekit/config")
+  const { storeKitConfiguredEnvironments } = await import("../../src/storekit/config")
   return {
     ...actual,
     // Mirror the real builder: it constructs one runtime per *configured* environment, which is
@@ -87,10 +86,7 @@ describe("StoreKit operational Apple calls", () => {
 
     await getStoreKitNotificationHistory(env, request, "page-2")
 
-    expect(productionClient.getNotificationHistory).toHaveBeenCalledWith(
-      "page-2",
-      request
-    )
+    expect(productionClient.getNotificationHistory).toHaveBeenCalledWith("page-2", request)
   })
 
   it("starts an unpaginated history read with a null token", async () => {
@@ -98,13 +94,9 @@ describe("StoreKit operational Apple calls", () => {
       sort: Order.DESCENDING
     })
 
-    expect(productionClient.getTransactionHistory).toHaveBeenCalledWith(
-      "transaction-1",
-      null,
-      {
-        sort: Order.DESCENDING
-      }
-    )
+    expect(productionClient.getTransactionHistory).toHaveBeenCalledWith("transaction-1", null, {
+      sort: Order.DESCENDING
+    })
   })
 
   it("forwards order lookup, renewal extension and consumption information unchanged", async () => {

@@ -63,7 +63,7 @@ export type StoreKitEntitlementSource =
  * The resolved entitlement for one original transaction at one instant.
  *
  * This is the module's central value: verification produces it, the policy kernel computes it,
- * storage projects it, and a host serves it. It carries only Apple-verified claims — nothing a
+ * storage projects it, and a host serves it. It carries only Apple-verified claims, nothing a
  * client asserted.
  */
 export interface StoreKitEntitlementSnapshot {

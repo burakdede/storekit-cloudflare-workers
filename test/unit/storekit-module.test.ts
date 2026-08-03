@@ -22,9 +22,7 @@ describe("public StoreKit module entrypoint", () => {
     expect(typeof storeKit.syncStoreKitTransaction).toBe("function")
     expect(typeof storeKit.processStoreKitNotification).toBe("function")
     expect(typeof storeKit.getStoreKitEntitlement).toBe("function")
-    expect(typeof storeKit.persistStoreKitSubscriptionForInstallation).toBe(
-      "function"
-    )
+    expect(typeof storeKit.persistStoreKitSubscriptionForInstallation).toBe("function")
     expect(typeof storeKit.resolveStoreKitEntitlementPolicy).toBe("function")
   })
 
@@ -35,14 +33,12 @@ describe("public StoreKit module entrypoint", () => {
     expect(typeof storeKit.requestStoreKitTestNotification).toBe("function")
     expect(typeof storeKit.getStoreKitNotificationHistory).toBe("function")
     expect(typeof storeKit.sendStoreKitConsumptionInformation).toBe("function")
-    expect(typeof storeKit.extendStoreKitSubscriptionRenewalDate).toBe(
-      "function"
-    )
+    expect(typeof storeKit.extendStoreKitSubscriptionRenewalDate).toBe("function")
   })
 
   /**
    * The module is meant to be copied into any Worker as a directory. If a file ever reaches back
-   * into this repository's helpers, that stops being true — so the boundary is asserted, not just
+   * into this repository's helpers, that stops being true, so the boundary is asserted, not just
    * documented.
    */
   it("imports nothing from outside the module except the Apple SDK", () => {
@@ -74,11 +70,7 @@ describe("public StoreKit module entrypoint", () => {
       expect(schema).toContain(`CREATE TABLE IF NOT EXISTS ${table}`)
     }
     // Columns the entitlement and out-of-order guards depend on.
-    for (const column of [
-      "access_expires_at",
-      "latest_signed_date",
-      "grace_period_expires_at"
-    ]) {
+    for (const column of ["access_expires_at", "latest_signed_date", "grace_period_expires_at"]) {
       expect(schema).toContain(column)
     }
   })
@@ -93,13 +85,11 @@ describe("public StoreKit module entrypoint", () => {
       contents.slice(contents.indexOf("CREATE TABLE")).trim()
 
     const migrationsDir = join(__dirname, "../../migrations")
-    const migrations = readdirSync(migrationsDir).filter((name) =>
-      name.endsWith(".sql")
-    )
+    const migrations = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql"))
     expect(migrations).toHaveLength(1)
 
-    expect(
-      sqlBody(readFileSync(join(migrationsDir, migrations[0]!), "utf8"))
-    ).toBe(sqlBody(readFileSync(join(MODULE_DIR, "schema.sql"), "utf8")))
+    expect(sqlBody(readFileSync(join(migrationsDir, migrations[0]!), "utf8"))).toBe(
+      sqlBody(readFileSync(join(MODULE_DIR, "schema.sql"), "utf8"))
+    )
   })
 })

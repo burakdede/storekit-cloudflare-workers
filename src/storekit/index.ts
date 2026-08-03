@@ -2,7 +2,7 @@
  * Drop-in server-side StoreKit 2 for Cloudflare Workers + D1.
  *
  * Copy this directory into a Worker, apply `schema.sql` to a D1 database, set the Apple secrets,
- * and mount `createStoreKitHandler` — see `docs/storekit-module.md`.
+ * and mount `createStoreKitHandler`. See the project README for the full integration guide.
  *
  * The design is server-authoritative: the iOS client submits Apple-signed JWS material and the
  * Worker verifies the signature, app identity, environment and product allow-list before any

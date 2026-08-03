@@ -42,16 +42,9 @@ export interface StoreKitSubscriptionRecord {
  */
 export type StoreKitDatabase = D1Database
 
-function requireStoreKitDb(
-  db: StoreKitDatabase | undefined,
-  operation: string
-): StoreKitDatabase {
+function requireStoreKitDb(db: StoreKitDatabase | undefined, operation: string): StoreKitDatabase {
   if (!db) {
-    throw new StoreKitPersistenceError(
-      "StoreKit D1 database is not bound.",
-      operation,
-      false
-    )
+    throw new StoreKitPersistenceError("StoreKit D1 database is not bound.", operation, false)
   }
   return db
 }
@@ -63,7 +56,7 @@ function isoNow(): string {
 /**
  * D1 failures are surfaced as a single persistence error type rather than the driver's own, so
  * hosts translate one thing. The underlying message is preserved for logging but never carries
- * request data — bindings are not included.
+ * request data; bindings are not included.
  */
 async function storeKitD1First<T>(
   db: StoreKitDatabase | undefined,
@@ -100,9 +93,7 @@ async function storeKitD1Batch(
   const database = requireStoreKitDb(db, operation)
   try {
     await database.batch(
-      statements.map((entry) =>
-        database.prepare(entry.statement).bind(...entry.bindings)
-      )
+      statements.map((entry) => database.prepare(entry.statement).bind(...entry.bindings))
     )
   } catch (error) {
     if (error instanceof StoreKitPersistenceError) throw error
@@ -228,11 +219,7 @@ function subscriptionBindings(
     snapshot.autoRenewStatus,
     snapshot.autoRenewProductId,
     snapshot.expirationIntent,
-    snapshot.isInBillingRetryPeriod === null
-      ? null
-      : snapshot.isInBillingRetryPeriod
-        ? 1
-        : 0,
+    snapshot.isInBillingRetryPeriod === null ? null : snapshot.isInBillingRetryPeriod ? 1 : 0,
     snapshot.priceIncreaseStatus,
     snapshot.renewalPrice,
     snapshot.currency,
@@ -274,14 +261,8 @@ function transactionBindings(
   ]
 }
 
-function assertPersistableSnapshot(
-  snapshot: StoreKitEntitlementSnapshot
-): void {
-  if (
-    !snapshot.originalTransactionId ||
-    !snapshot.latestTransactionId ||
-    !snapshot.productId
-  ) {
+function assertPersistableSnapshot(snapshot: StoreKitEntitlementSnapshot): void {
+  if (!snapshot.originalTransactionId || !snapshot.latestTransactionId || !snapshot.productId) {
     throw new StoreKitPersistenceError(
       "StoreKit snapshot is missing the identity required to persist it.",
       "storekit_snapshot_validation",
@@ -306,21 +287,11 @@ function snapshotProjectionStatements(
   return [
     {
       statement: transactionUpsertStatement(),
-      bindings: transactionBindings(
-        snapshot,
-        installationId,
-        appBundleId,
-        nowIso
-      )
+      bindings: transactionBindings(snapshot, installationId, appBundleId, nowIso)
     },
     {
       statement: subscriptionUpsertStatement(),
-      bindings: subscriptionBindings(
-        snapshot,
-        installationId,
-        appBundleId,
-        nowIso
-      )
+      bindings: subscriptionBindings(snapshot, installationId, appBundleId, nowIso)
     }
   ]
 }
@@ -460,11 +431,7 @@ export async function persistStoreKitNotification(
     notification.transactionId
   )
   if (!snapshot) {
-    await storeKitD1Batch(
-      db,
-      [notificationStatement],
-      "storekit_notification_insert"
-    )
+    await storeKitD1Batch(db, [notificationStatement], "storekit_notification_insert")
     return
   }
   assertPersistableSnapshot(snapshot)
@@ -473,10 +440,7 @@ export async function persistStoreKitNotification(
   // whatever binding a previous sync established.
   await storeKitD1Batch(
     db,
-    [
-      ...snapshotProjectionStatements(snapshot, null, appBundleId),
-      notificationStatement
-    ],
+    [...snapshotProjectionStatements(snapshot, null, appBundleId), notificationStatement],
     "storekit_notification_and_subscription_upsert"
   )
 }

@@ -13,10 +13,8 @@ import {
   type StoreKitEnv
 } from "../../src/storekit"
 
-const PRIVATE_KEY =
-  "-----BEGIN PRIVATE KEY-----\nMEECAQ==\n-----END PRIVATE KEY-----"
-const ROOT_CERT =
-  "-----BEGIN CERTIFICATE-----\nAQIDBA==\n-----END CERTIFICATE-----"
+const PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nMEECAQ==\n-----END PRIVATE KEY-----"
+const ROOT_CERT = "-----BEGIN CERTIFICATE-----\nAQIDBA==\n-----END CERTIFICATE-----"
 
 function completeConfig(overrides: Partial<StoreKitEnv> = {}): StoreKitEnv {
   return {
@@ -75,10 +73,7 @@ describe("storekit configuration", () => {
     })
 
     expect(productIds).toEqual(
-      new Set([
-        "com.example.app.pro.annual",
-        "com.example.app.pro.monthly"
-      ])
+      new Set(["com.example.app.pro.annual", "com.example.app.pro.monthly"])
     )
   })
 
@@ -188,9 +183,7 @@ BQYHCA==
 
       expect(report.valid).toBe(false)
       expect(report.problems.join(" ")).toMatch(problem)
-      expect(() => assertStoreKitConfig(completeConfig(env))).toThrow(
-        StoreKitConfigError
-      )
+      expect(() => assertStoreKitConfig(completeConfig(env))).toThrow(StoreKitConfigError)
     })
 
     it("does not demand a numeric app id for a sandbox-only deployment", () => {
@@ -213,9 +206,7 @@ BQYHCA==
   })
 
   it("uses stable StoreKit verification error names", () => {
-    expect(new StoreKitVerificationError().name).toBe(
-      "StoreKitVerificationError"
-    )
+    expect(new StoreKitVerificationError().name).toBe("StoreKitVerificationError")
   })
 
   it("preserves StoreKit verification diagnostics", () => {

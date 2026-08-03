@@ -3,7 +3,7 @@
  *
  * Each class maps to a distinct host response: configuration problems are operator errors,
  * verification failures are client/Apple errors, and storage failures are transient backend
- * errors. Messages are deliberately generic — diagnostics travel in structured fields so a host
+ * errors. Messages are deliberately generic; diagnostics travel in structured fields so a host
  * can log them without leaking Apple credentials or signed payloads to a client.
  */
 

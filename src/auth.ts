@@ -2,7 +2,7 @@
  * Replace this adapter with your application's authentication.
  *
  * This is the one piece the module cannot supply. A StoreKit transaction proves *that a purchase
- * happened*, never *who it belongs to* — only your app knows that. Resolve the caller here and
+ * happened*, never *who it belongs to*; only your app knows that. Resolve the caller here and
  * return the account the entitlement should bind to.
  *
  * It ships failing closed: until you implement it, every authenticated route answers 401. That is
@@ -18,7 +18,7 @@ export async function authenticateStoreKitRequest(
   void request
   void env
 
-  // Example — replace with your own session/JWT/API-key verification:
+  // Example: replace with your own session/JWT/API-key verification:
   //
   //   const session = await verifySessionToken(request.headers.get("authorization"), env)
   //   if (!session) return null

@@ -28,21 +28,14 @@ function json(value: unknown, status = 200): Response {
 }
 
 export default {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
 
     // Surface a misconfigured deployment here rather than at a customer's first purchase.
     // `describeStoreKitConfig` reports secret presence only, never a value.
     if (request.method === "GET" && url.pathname === "/health") {
       const report = describeStoreKitConfig(env)
-      return json(
-        { ok: report.valid, storekit: report },
-        report.valid ? 200 : 503
-      )
+      return json({ ok: report.valid, storekit: report }, report.valid ? 200 : 503)
     }
 
     const handled = await storekit.fetch(request, env, ctx)

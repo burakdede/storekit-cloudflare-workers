@@ -83,13 +83,9 @@ function isFutureAppleMillis(value: number | undefined, now: Date): boolean {
   return Number.isFinite(value) && Number(value) > now.getTime()
 }
 
-function isValidEntitlementProduct(
-  transaction: StoreKitEntitlementTransaction
-): boolean {
+function isValidEntitlementProduct(transaction: StoreKitEntitlementTransaction): boolean {
   return Boolean(
-    transaction.productId &&
-    transaction.originalTransactionId &&
-    transaction.transactionId
+    transaction.productId && transaction.originalTransactionId && transaction.transactionId
   )
 }
 
@@ -101,13 +97,8 @@ function transactionMillis(value: number | undefined): number {
  * A non-consumable purchase never expires, so Apple omits `expiresDate` entirely. Treating a
  * missing expiry as "expired" would revoke every lifetime unlock.
  */
-function isPerpetualPurchase(
-  transaction: StoreKitEntitlementTransaction
-): boolean {
-  return (
-    transaction.type === NON_CONSUMABLE &&
-    !Number.isFinite(transaction.expiresDate)
-  )
+function isPerpetualPurchase(transaction: StoreKitEntitlementTransaction): boolean {
+  return transaction.type === NON_CONSUMABLE && !Number.isFinite(transaction.expiresDate)
 }
 
 /**
@@ -175,9 +166,7 @@ function isCandidateActive(
 }
 
 /** Sort key for picking the longest-lived candidate; perpetual purchases outrank every expiry. */
-function candidateDeadlineRank(
-  candidate: StoreKitEntitlementCandidate
-): number {
+function candidateDeadlineRank(candidate: StoreKitEntitlementCandidate): number {
   const deadline = accessDeadlineMillis(
     candidate.transaction,
     candidate.status,
@@ -190,10 +179,8 @@ function compareCandidates(
   left: StoreKitEntitlementCandidate,
   right: StoreKitEntitlementCandidate
 ): number {
-  const deadlineDelta =
-    candidateDeadlineRank(right) - candidateDeadlineRank(left)
-  if (deadlineDelta !== 0 && Number.isFinite(deadlineDelta))
-    return deadlineDelta
+  const deadlineDelta = candidateDeadlineRank(right) - candidateDeadlineRank(left)
+  if (deadlineDelta !== 0 && Number.isFinite(deadlineDelta)) return deadlineDelta
   if (deadlineDelta !== 0) return deadlineDelta > 0 ? 1 : -1
   return (
     transactionMillis(right.transaction.purchaseDate) -
@@ -209,17 +196,12 @@ function compareCandidates(
  * ones that are not free. `offerDiscountType` is the field that actually distinguishes a trial;
  * the `offerType` check remains as a fallback for transactions signed before Apple added it.
  */
-function isFreeTrialTransaction(
-  transaction: StoreKitEntitlementTransaction
-): boolean {
-  if (transaction.offerDiscountType)
-    return transaction.offerDiscountType === FREE_TRIAL
+function isFreeTrialTransaction(transaction: StoreKitEntitlementTransaction): boolean {
+  if (transaction.offerDiscountType) return transaction.offerDiscountType === FREE_TRIAL
   return transaction.offerType === INTRODUCTORY_OFFER
 }
 
-function activeStatus(
-  transaction: StoreKitEntitlementTransaction
-): "active_trial" | "active_paid" {
+function activeStatus(transaction: StoreKitEntitlementTransaction): "active_trial" | "active_paid" {
   return isFreeTrialTransaction(transaction) ? "active_trial" : "active_paid"
 }
 
@@ -231,21 +213,14 @@ function baseSnapshot(
   now: Date
 ): StoreKitEntitlementSnapshot {
   const { transaction, renewalInfo } = candidate
-  const accessDeadline = accessDeadlineMillis(
-    transaction,
-    candidate.status,
-    renewalInfo
-  )
+  const accessDeadline = accessDeadlineMillis(transaction, candidate.status, renewalInfo)
   return {
     proActive,
     productId: transaction.productId ?? null,
     expiresAt: isoFromAppleMillis(transaction.expiresDate),
-    accessExpiresAt:
-      accessDeadline === undefined ? null : isoFromAppleMillis(accessDeadline),
+    accessExpiresAt: accessDeadline === undefined ? null : isoFromAppleMillis(accessDeadline),
     perpetual: isPerpetualPurchase(transaction),
-    gracePeriodExpiresAt: isoFromAppleMillis(
-      renewalInfo?.gracePeriodExpiresDate
-    ),
+    gracePeriodExpiresAt: isoFromAppleMillis(renewalInfo?.gracePeriodExpiresDate),
     isTrial: status === "active_trial",
     status,
     environment,
@@ -258,9 +233,7 @@ function baseSnapshot(
     appAccountToken: transaction.appAccountToken ?? null,
     productType: transaction.type ?? null,
     offerDiscountType: transaction.offerDiscountType ?? null,
-    signedDate: isoFromAppleMillis(
-      transaction.signedDate ?? renewalInfo?.signedDate
-    ),
+    signedDate: isoFromAppleMillis(transaction.signedDate ?? renewalInfo?.signedDate),
     autoRenewStatus: renewalInfo?.autoRenewStatus ?? null,
     autoRenewProductId: renewalInfo?.autoRenewProductId ?? null,
     expirationIntent: renewalInfo?.expirationIntent ?? null,
@@ -320,22 +293,10 @@ export function resolveStoreKitEntitlementCore(
     if (!withinGrace) {
       return baseSnapshot(candidate, input.environment, "expired", false, now)
     }
-    return baseSnapshot(
-      candidate,
-      input.environment,
-      "grace_period",
-      allowGracePeriodAccess,
-      now
-    )
+    return baseSnapshot(candidate, input.environment, "grace_period", allowGracePeriodAccess, now)
   }
   if (status === STATUS.BILLING_RETRY) {
-    return baseSnapshot(
-      candidate,
-      input.environment,
-      "billing_retry",
-      false,
-      now
-    )
+    return baseSnapshot(candidate, input.environment, "billing_retry", false, now)
   }
   if (status === STATUS.EXPIRED) {
     return baseSnapshot(candidate, input.environment, "expired", false, now)
@@ -344,13 +305,7 @@ export function resolveStoreKitEntitlementCore(
     if (!hasAccessWindow(transaction, status, renewalInfo, now)) {
       return baseSnapshot(candidate, input.environment, "expired", false, now)
     }
-    return baseSnapshot(
-      candidate,
-      input.environment,
-      activeStatus(transaction),
-      true,
-      now
-    )
+    return baseSnapshot(candidate, input.environment, activeStatus(transaction), true, now)
   }
   return baseSnapshot(candidate, input.environment, "unknown", false, now)
 }

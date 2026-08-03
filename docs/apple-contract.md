@@ -1,6 +1,6 @@
 # Apple contract references
 
-This project follows Apple’s StoreKit server contracts and the official Apple server library. Verify
+This project follows Apple's StoreKit server contracts and the official Apple server library. Verify
 these documents when Apple changes notification fields or API behavior:
 
 - [App Store Server API](https://developer.apple.com/documentation/appstoreserverapi)

@@ -59,17 +59,13 @@ describe("standalone StoreKit entitlement core", () => {
   it("fails closed for billing retry and configurable grace access", () => {
     expect(resolveStoreKitEntitlementCore(input(3), now).proActive).toBe(false)
     expect(resolveStoreKitEntitlementCore(input(4), now).proActive).toBe(true)
-    expect(resolveStoreKitEntitlementCore(input(4), now, false).proActive).toBe(
-      false
-    )
+    expect(resolveStoreKitEntitlementCore(input(4), now, false).proActive).toBe(false)
   })
 
   describe("billing grace period", () => {
     // A renewal has already failed by the time Apple reports status 4, so the transaction's own
     // expiresDate is in the past while the customer must keep access until the grace deadline.
-    function graceInput(
-      gracePeriodExpiresDate: number | undefined
-    ): StoreKitEntitlementInput {
+    function graceInput(gracePeriodExpiresDate: number | undefined): StoreKitEntitlementInput {
       const verified = input(4)
       verified.transaction.expiresDate = past
       verified.latestRenewalInfo = {
@@ -91,27 +87,21 @@ describe("standalone StoreKit entitlement core", () => {
     })
 
     it("expires once the grace deadline has passed", () => {
-      expect(
-        resolveStoreKitEntitlementCore(graceInput(past), now)
-      ).toMatchObject({
+      expect(resolveStoreKitEntitlementCore(graceInput(past), now)).toMatchObject({
         proActive: false,
         status: "expired"
       })
     })
 
     it("trusts Apple's status when the grace deadline is unavailable", () => {
-      expect(
-        resolveStoreKitEntitlementCore(graceInput(undefined), now)
-      ).toMatchObject({
+      expect(resolveStoreKitEntitlementCore(graceInput(undefined), now)).toMatchObject({
         proActive: true,
         status: "grace_period"
       })
     })
 
     it("still denies access when grace access is disabled", () => {
-      expect(
-        resolveStoreKitEntitlementCore(graceInput(future), now, false)
-      ).toMatchObject({
+      expect(resolveStoreKitEntitlementCore(graceInput(future), now, false)).toMatchObject({
         proActive: false,
         status: "grace_period"
       })

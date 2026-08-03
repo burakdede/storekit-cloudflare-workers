@@ -5,10 +5,7 @@ import {
   type JWSTransactionDecodedPayload
 } from "@apple/app-store-server-library"
 import { describe, expect, it } from "vitest"
-import {
-  resolveStoreKitEntitlement,
-  type VerifiedStoreKitTransaction
-} from "../../src/storekit"
+import { resolveStoreKitEntitlement, type VerifiedStoreKitTransaction } from "../../src/storekit"
 
 const now = new Date("2026-05-26T12:00:00.000Z")
 const future = Date.parse("2099-06-02T12:00:00.000Z")
@@ -41,8 +38,7 @@ function verified(
       status === undefined
         ? null
         : {
-            originalTransactionId:
-              transaction.originalTransactionId ?? "original-1",
+            originalTransactionId: transaction.originalTransactionId ?? "original-1",
             status,
             signedTransactionInfo: "signed-transaction"
           },
@@ -68,10 +64,7 @@ describe("storekit entitlement mapper", () => {
 
   it("maps active paid monthly or weekly transactions to Pro paid", () => {
     const entitlement = resolveStoreKitEntitlement(
-      verified(
-        { productId: "com.example.app.pro.monthly" },
-        Status.ACTIVE
-      ),
+      verified({ productId: "com.example.app.pro.monthly" }, Status.ACTIVE),
       now
     )
 
@@ -95,17 +88,12 @@ describe("storekit entitlement mapper", () => {
 
   it("refund and revoke statuses remove Pro immediately", () => {
     expect(
-      resolveStoreKitEntitlement(
-        verified({ revocationDate: future }, Status.ACTIVE),
-        now
-      )
+      resolveStoreKitEntitlement(verified({ revocationDate: future }, Status.ACTIVE), now)
     ).toMatchObject({
       proActive: false,
       status: "refunded"
     })
-    expect(
-      resolveStoreKitEntitlement(verified({}, Status.REVOKED), now)
-    ).toMatchObject({
+    expect(resolveStoreKitEntitlement(verified({}, Status.REVOKED), now)).toMatchObject({
       proActive: false,
       status: "revoked"
     })
@@ -119,18 +107,12 @@ describe("storekit entitlement mapper", () => {
       status: "grace_period"
     })
     expect(
-      resolveStoreKitEntitlement(
-        verified({}, Status.BILLING_GRACE_PERIOD),
-        now,
-        false
-      )
+      resolveStoreKitEntitlement(verified({}, Status.BILLING_GRACE_PERIOD), now, false)
     ).toMatchObject({
       proActive: false,
       status: "grace_period"
     })
-    expect(
-      resolveStoreKitEntitlement(verified({}, Status.BILLING_RETRY), now)
-    ).toMatchObject({
+    expect(resolveStoreKitEntitlement(verified({}, Status.BILLING_RETRY), now)).toMatchObject({
       proActive: false,
       status: "billing_retry"
     })
@@ -138,10 +120,7 @@ describe("storekit entitlement mapper", () => {
 
   it("fails closed for missing identity or unsupported status", () => {
     expect(
-      resolveStoreKitEntitlement(
-        verified({ transactionId: "" }, Status.ACTIVE),
-        now
-      )
+      resolveStoreKitEntitlement(verified({ transactionId: "" }, Status.ACTIVE), now)
     ).toMatchObject({
       proActive: false,
       status: "unknown"
@@ -149,9 +128,7 @@ describe("storekit entitlement mapper", () => {
   })
 
   it("uses a verified future StoreKit transaction when Apple status lookup is unavailable", () => {
-    expect(
-      resolveStoreKitEntitlement(verified({}, undefined), now)
-    ).toMatchObject({
+    expect(resolveStoreKitEntitlement(verified({}, undefined), now)).toMatchObject({
       proActive: true,
       status: "active_paid"
     })
@@ -165,10 +142,7 @@ describe("storekit entitlement mapper", () => {
       status: "active_trial"
     })
     expect(
-      resolveStoreKitEntitlement(
-        verified({ expiresDate: past }, undefined),
-        now
-      )
+      resolveStoreKitEntitlement(verified({ expiresDate: past }, undefined), now)
     ).toMatchObject({
       proActive: false,
       status: "expired"
@@ -227,9 +201,7 @@ describe("storekit entitlement mapper", () => {
           status: Status.ACTIVE,
           signedTransactionInfo: "signed-renewal"
         },
-        subscriptionTransactions: [
-          { status: Status.ACTIVE, transaction: renewal }
-        ]
+        subscriptionTransactions: [{ status: Status.ACTIVE, transaction: renewal }]
       },
       now
     )

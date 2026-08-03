@@ -2,17 +2,13 @@
  * Configuration parsing and validation for the StoreKit module.
  *
  * Everything the module needs arrives as plain Worker variables and secrets. This file is the one
- * place that interprets them, so a host can validate its deployment up front — with
- * `describeStoreKitConfig` at startup or in a health check — instead of discovering a missing
+ * place that interprets them, so a host can validate its deployment up front, with
+ * `describeStoreKitConfig` at startup or in a health check, instead of discovering a missing
  * secret when a customer's first purchase fails.
  */
 import { Buffer } from "buffer"
 import { StoreKitConfigError } from "./errors"
-import {
-  STOREKIT_ENVIRONMENT,
-  type StoreKitEnv,
-  type StoreKitEnvironment
-} from "./types"
+import { STOREKIT_ENVIRONMENT, type StoreKitEnv, type StoreKitEnvironment } from "./types"
 
 const TRUTHY = new Set(["true", "1", "yes", "on"])
 const FALSY = new Set(["false", "0", "no", "off"])
@@ -32,10 +28,7 @@ function commaSeparated(raw: string | undefined): string[] {
     .filter(Boolean)
 }
 
-export function requiredStoreKitValue(
-  value: string | undefined,
-  name: string
-): string {
+export function requiredStoreKitValue(value: string | undefined, name: string): string {
   const trimmed = value?.trim()
   if (!trimmed) throw new StoreKitConfigError(`${name} is required.`)
   return trimmed
@@ -48,15 +41,11 @@ export function requiredStoreKitValue(
  * means no signature can ever be trusted. Download them from Apple's PKI page and store the
  * concatenated PEM as a secret.
  */
-export function parseAppleRootCertificatesPem(
-  rawPem: string | undefined
-): Buffer[] {
+export function parseAppleRootCertificatesPem(rawPem: string | undefined): Buffer[] {
   const trimmed = rawPem?.trim()
   if (!trimmed) return []
 
-  const matches = trimmed.match(
-    /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g
-  )
+  const matches = trimmed.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g)
   if (!matches) return []
 
   return matches.map((pem) => {
@@ -104,22 +93,15 @@ export function storeKitReconcileNotifications(env: StoreKitEnv): boolean {
  * Order matters: a payload is tried against production before sandbox, so a production
  * deployment never mistakes a sandbox-signed transaction for a real purchase.
  */
-export function storeKitConfiguredEnvironments(
-  env: StoreKitEnv
-): StoreKitEnvironment[] {
+export function storeKitConfiguredEnvironments(env: StoreKitEnv): StoreKitEnvironment[] {
   const values = new Set(commaSeparated(env.STOREKIT_ALLOWED_ENVIRONMENTS))
 
   if (values.size === 0) {
-    throw new StoreKitConfigError(
-      "At least one StoreKit environment must be configured."
-    )
+    throw new StoreKitConfigError("At least one StoreKit environment must be configured.")
   }
 
   for (const value of values) {
-    if (
-      value !== STOREKIT_ENVIRONMENT.SANDBOX &&
-      value !== STOREKIT_ENVIRONMENT.PRODUCTION
-    ) {
+    if (value !== STOREKIT_ENVIRONMENT.SANDBOX && value !== STOREKIT_ENVIRONMENT.PRODUCTION) {
       throw new StoreKitConfigError("Unsupported StoreKit environment.")
     }
   }
@@ -134,12 +116,8 @@ export function storeKitConfiguredEnvironments(
   return environments
 }
 
-export function storeKitConfiguredEnvironment(
-  env: StoreKitEnv
-): StoreKitEnvironment {
-  return (
-    storeKitConfiguredEnvironments(env)[0] ?? STOREKIT_ENVIRONMENT.PRODUCTION
-  )
+export function storeKitConfiguredEnvironment(env: StoreKitEnv): StoreKitEnvironment {
+  return storeKitConfiguredEnvironments(env)[0] ?? STOREKIT_ENVIRONMENT.PRODUCTION
 }
 
 /**
@@ -151,15 +129,10 @@ export function storeKitAppAppleId(
   environment: StoreKitEnvironment
 ): number | undefined {
   if (environment === STOREKIT_ENVIRONMENT.SANDBOX) return undefined
-  const raw = requiredStoreKitValue(
-    env.APP_STORE_APP_APPLE_ID,
-    "APP_STORE_APP_APPLE_ID"
-  )
+  const raw = requiredStoreKitValue(env.APP_STORE_APP_APPLE_ID, "APP_STORE_APP_APPLE_ID")
   const parsed = Number(raw)
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new StoreKitConfigError(
-      "APP_STORE_APP_APPLE_ID must be a positive integer."
-    )
+    throw new StoreKitConfigError("APP_STORE_APP_APPLE_ID must be a positive integer.")
   }
   return parsed
 }
@@ -180,8 +153,8 @@ export interface StoreKitConfigReport {
 /**
  * Check a deployment's StoreKit configuration without contacting Apple.
  *
- * Intended for a startup assertion or a health endpoint. It reports secret *presence* only —
- * never a value — so the result is safe to log or expose to an operator dashboard.
+ * Intended for a startup assertion or a health endpoint. It reports secret *presence* only,
+ * never a value, so the result is safe to log or expose to an operator dashboard.
  */
 export function describeStoreKitConfig(env: StoreKitEnv): StoreKitConfigReport {
   const problems: string[] = []
@@ -191,9 +164,7 @@ export function describeStoreKitConfig(env: StoreKitEnv): StoreKitConfigReport {
     environments = storeKitConfiguredEnvironments(env)
   } catch (error) {
     problems.push(
-      error instanceof Error
-        ? error.message
-        : "STOREKIT_ALLOWED_ENVIRONMENTS is invalid."
+      error instanceof Error ? error.message : "STOREKIT_ALLOWED_ENVIRONMENTS is invalid."
     )
   }
 
@@ -202,22 +173,14 @@ export function describeStoreKitConfig(env: StoreKitEnv): StoreKitConfigReport {
 
   const productIds = [...storeKitAllowedProductIds(env)]
   if (productIds.length === 0) {
-    problems.push(
-      "STOREKIT_ALLOWED_PRODUCT_IDS is required and must not be empty."
-    )
+    problems.push("STOREKIT_ALLOWED_PRODUCT_IDS is required and must not be empty.")
   }
 
   const secretsPresent: Record<string, boolean> = {
-    APP_STORE_CONNECT_ISSUER_ID: Boolean(
-      env.APP_STORE_CONNECT_ISSUER_ID?.trim()
-    ),
+    APP_STORE_CONNECT_ISSUER_ID: Boolean(env.APP_STORE_CONNECT_ISSUER_ID?.trim()),
     APP_STORE_CONNECT_KEY_ID: Boolean(env.APP_STORE_CONNECT_KEY_ID?.trim()),
-    APP_STORE_CONNECT_PRIVATE_KEY: Boolean(
-      env.APP_STORE_CONNECT_PRIVATE_KEY?.trim()
-    ),
-    APPLE_ROOT_CERTIFICATES_PEM: Boolean(
-      env.APPLE_ROOT_CERTIFICATES_PEM?.trim()
-    )
+    APP_STORE_CONNECT_PRIVATE_KEY: Boolean(env.APP_STORE_CONNECT_PRIVATE_KEY?.trim()),
+    APPLE_ROOT_CERTIFICATES_PEM: Boolean(env.APPLE_ROOT_CERTIFICATES_PEM?.trim())
   }
   for (const [name, present] of Object.entries(secretsPresent)) {
     if (!present) problems.push(`${name} is required.`)
@@ -226,9 +189,7 @@ export function describeStoreKitConfig(env: StoreKitEnv): StoreKitConfigReport {
   if (secretsPresent.APPLE_ROOT_CERTIFICATES_PEM) {
     const roots = parseAppleRootCertificatesPem(env.APPLE_ROOT_CERTIFICATES_PEM)
     if (roots.length === 0) {
-      problems.push(
-        "APPLE_ROOT_CERTIFICATES_PEM does not contain any PEM certificate block."
-      )
+      problems.push("APPLE_ROOT_CERTIFICATES_PEM does not contain any PEM certificate block.")
     }
   }
 
@@ -245,11 +206,7 @@ export function describeStoreKitConfig(env: StoreKitEnv): StoreKitConfigReport {
     try {
       storeKitAppAppleId(env, STOREKIT_ENVIRONMENT.PRODUCTION)
     } catch (error) {
-      problems.push(
-        error instanceof Error
-          ? error.message
-          : "APP_STORE_APP_APPLE_ID is invalid."
-      )
+      problems.push(error instanceof Error ? error.message : "APP_STORE_APP_APPLE_ID is invalid.")
     }
   }
 
@@ -269,8 +226,6 @@ export function describeStoreKitConfig(env: StoreKitEnv): StoreKitConfigReport {
 export function assertStoreKitConfig(env: StoreKitEnv): void {
   const report = describeStoreKitConfig(env)
   if (!report.valid) {
-    throw new StoreKitConfigError(
-      `StoreKit is misconfigured: ${report.problems.join(" ")}`
-    )
+    throw new StoreKitConfigError(`StoreKit is misconfigured: ${report.problems.join(" ")}`)
   }
 }

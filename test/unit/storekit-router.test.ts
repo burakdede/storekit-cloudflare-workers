@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { MockD1Database } from "../helpers/mock-d1"
 import { createStoreKitHandler } from "../../src/storekit/router"
-import {
-  StoreKitPersistenceError,
-  StoreKitVerificationError
-} from "../../src/storekit/errors"
+import { StoreKitPersistenceError, StoreKitVerificationError } from "../../src/storekit/errors"
 import type * as StoreKitService from "../../src/storekit/service"
 
 const snapshot = {
@@ -23,10 +20,8 @@ vi.mock("../../src/storekit/service", async (importOriginal) => {
   const actual = await importOriginal<typeof StoreKitService>()
   return {
     ...actual,
-    syncStoreKitTransaction: (...args: unknown[]) =>
-      syncStoreKitTransaction(...args),
-    processStoreKitNotification: (...args: unknown[]) =>
-      processStoreKitNotification(...args)
+    syncStoreKitTransaction: (...args: unknown[]) => syncStoreKitTransaction(...args),
+    processStoreKitNotification: (...args: unknown[]) => processStoreKitNotification(...args)
   }
 })
 
@@ -39,9 +34,7 @@ function env() {
   }
 }
 
-function handler(
-  overrides: Partial<Parameters<typeof createStoreKitHandler>[0]> = {}
-) {
+function handler(overrides: Partial<Parameters<typeof createStoreKitHandler>[0]> = {}) {
   return createStoreKitHandler({
     authenticate: () => ({
       accountId: "account-1",
@@ -65,10 +58,7 @@ describe("StoreKit drop-in router", () => {
   beforeEach(() => vi.clearAllMocks())
 
   it("ignores requests that are not StoreKit routes so it composes with a host router", async () => {
-    const response = await handler().fetch(
-      new Request("https://example.com/other"),
-      env()
-    )
+    const response = await handler().fetch(new Request("https://example.com/other"), env())
 
     expect(response).toBeNull()
   })
@@ -177,11 +167,7 @@ describe("StoreKit drop-in router", () => {
 
   it("answers 503 for a retryable storage failure so Apple redelivers", async () => {
     processStoreKitNotification.mockRejectedValueOnce(
-      new StoreKitPersistenceError(
-        "d1 down",
-        "storekit_notification_insert",
-        true
-      )
+      new StoreKitPersistenceError("d1 down", "storekit_notification_insert", true)
     )
 
     const response = await handler().fetch(

@@ -42,14 +42,14 @@ source change. The equivalent `createStoreKitHandler` options override the varia
 
 | Secret                          | Where it comes from                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------- |
-| `APP_STORE_CONNECT_ISSUER_ID`   | App Store Connect → Integrations → App Store Connect API, above the key list |
+| `APP_STORE_CONNECT_ISSUER_ID`   | App Store Connect > Integrations > App Store Connect API, above the key list |
 | `APP_STORE_CONNECT_KEY_ID`      | Shown next to the key you generate                                           |
 | `APP_STORE_CONNECT_PRIVATE_KEY` | The full `.p8` contents, `BEGIN`/`END` lines and newlines preserved          |
 | `APPLE_ROOT_CERTIFICATES_PEM`   | Apple's PKI root certificates, converted to PEM and concatenated             |
 
 ### App Store Connect API key
 
-**Users and Access → Integrations → App Store Connect API**, and generate a key with the **In-App
+**Users and Access > Integrations > App Store Connect API**, and generate a key with the **In-App
 Purchase** role. The Admin-level Team key also works but grants far more than this needs.
 
 Apple lets you download the `.p8` **once**.
@@ -94,9 +94,9 @@ A submitted transaction JWS is itself cryptographically verifiable, so when Appl
 unreachable the module can still resolve an entitlement from the signed expiry and revocation claims
 it already checked.
 
-- `true` (default) — a customer who paid keeps access during an Apple outage. The trade-off is that
+- `true` (default): a customer who paid keeps access during an Apple outage. The trade-off is that
   a signed-but-stale transaction can be replayed to extend access until its own signed expiry.
-- `false` — sync answers 503 during an Apple outage. Choose this when a stale grant is worse than a
+- `false`: sync answers 503 during an Apple outage. Choose this when a stale grant is worse than a
   temporary denial.
 
 Either way the choice never weakens signature verification, and the source used is reported to your

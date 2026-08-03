@@ -9,26 +9,26 @@ projection.
 By default it then **re-reads Apple's `Get All Subscription Statuses`** rather than trusting the
 notification payload alone. The payload is a point-in-time snapshot that may be delivered late;
 Apple's status endpoint is current. This is also what lets a `REFUND` or `REVOKE` revoke access even
-though those payloads carry no subscription `status` field — the revocation date on the signed
+though those payloads carry no subscription `status` field; the revocation date on the signed
 transaction is enough. Set `STOREKIT_RECONCILE_NOTIFICATIONS=false` to skip the extra call.
 
-Notifications without transaction data — `TEST`, summaries, external purchase tokens, app data — are
+Notifications without transaction data (`TEST`, summaries, external purchase tokens, app data) are
 verified for outer identity and recorded without touching entitlement state.
 
 ### Response codes
 
-| Status | Meaning                                                                                      |
-| ------ | -------------------------------------------------------------------------------------------- |
-| `200`  | Processed, or a duplicate. Returning 200 for a replay is deliberate — the event was handled. |
-| `401`  | The payload did not verify. Never answer 200 to an unverified payload.                       |
-| `503`  | Transient persistence failure. Apple retries, which is what you want.                        |
+| Status | Meaning                                                                                     |
+| ------ | ------------------------------------------------------------------------------------------- |
+| `200`  | Processed, or a duplicate. Returning 200 for a replay is deliberate; the event was handled. |
+| `401`  | The payload did not verify. Never answer 200 to an unverified payload.                      |
+| `503`  | Transient persistence failure. Apple retries, which is what you want.                       |
 
 Apple retries non-2xx responses over a period of days, so a transient failure recovers on its own.
 
 ### Out-of-order delivery
 
-Apple does not guarantee ordering. Every projection row carries `latest_signed_date` — **Apple's**
-signing time, not the server clock, because a late-arriving old event has a _newer_ clock reading —
+Apple does not guarantee ordering. Every projection row carries `latest_signed_date`, **Apple's**
+signing time, not the server clock, because a late-arriving old event has a _newer_ clock reading,
 and an upsert only applies when the incoming signed date is at least as recent as the stored one.
 Revocations bypass the guard because a refund is terminal and must always land.
 
@@ -49,10 +49,7 @@ await requestStoreKitTestNotification(env)
 Then page through the outage window:
 
 ```ts
-import {
-  getStoreKitNotificationHistory,
-  processStoreKitNotification
-} from "./storekit"
+import { getStoreKitNotificationHistory, processStoreKitNotification } from "./storekit"
 
 let paginationToken: string | null = null
 do {
@@ -93,7 +90,7 @@ response deadline, so handle it promptly rather than in a nightly batch, and onl
 `consentStatus` reflects genuine consent.
 
 Extensions produce a `RENEWAL_EXTENSION` notification, so the projection updates through the normal
-webhook path — no separate write is needed.
+webhook path; no separate write is needed.
 
 ## Inspecting state
 

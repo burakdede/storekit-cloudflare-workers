@@ -197,26 +197,11 @@ export class MockD1Database {
   private readonly mobileSessionsByRefreshHash = new Map<string, string>()
   private readonly mobileEntitlements = new Map<string, MobileEntitlementRow>()
   private readonly mobileRateLimits = new Map<string, MobileRateLimitRow>()
-  private readonly mobileAppAttestChallenges = new Map<
-    string,
-    MobileAppAttestChallengeRow
-  >()
-  private readonly mobileAppAttestKeys = new Map<
-    string,
-    MobileAppAttestKeyRow
-  >()
-  private readonly storeKitSubscriptions = new Map<
-    string,
-    StoreKitSubscriptionRow
-  >()
-  private readonly storeKitNotifications = new Map<
-    string,
-    StoreKitNotificationRow
-  >()
-  private readonly storeKitTransactions = new Map<
-    string,
-    StoreKitTransactionRow
-  >()
+  private readonly mobileAppAttestChallenges = new Map<string, MobileAppAttestChallengeRow>()
+  private readonly mobileAppAttestKeys = new Map<string, MobileAppAttestKeyRow>()
+  private readonly storeKitSubscriptions = new Map<string, StoreKitSubscriptionRow>()
+  private readonly storeKitNotifications = new Map<string, StoreKitNotificationRow>()
+  private readonly storeKitTransactions = new Map<string, StoreKitTransactionRow>()
   private readonly routeLeases = new Map<string, RouteLeaseRow>()
   private readonly routePopularityRows = new Map<string, RoutePopularityRow>()
 
@@ -224,9 +209,7 @@ export class MockD1Database {
     return new MockPreparedStatement(this, sql)
   }
 
-  async batch<T = unknown>(
-    statements: MockPreparedStatement[]
-  ): Promise<Array<{ results: T[] }>> {
+  async batch<T = unknown>(statements: MockPreparedStatement[]): Promise<Array<{ results: T[] }>> {
     const results: Array<{ results: T[] }> = []
     for (const statement of statements) {
       await this.run(statement.getSql(), statement.getBindings())
@@ -237,11 +220,7 @@ export class MockD1Database {
 
   seedMobileEntitlement(row: MobileEntitlementRow): void {
     this.mobileEntitlements.set(
-      this.entitlementKey(
-        row.app_transaction_hash,
-        row.app_store_environment,
-        row.app_bundle_id
-      ),
+      this.entitlementKey(row.app_transaction_hash, row.app_store_environment, row.app_bundle_id),
       row
     )
   }
@@ -288,10 +267,7 @@ export class MockD1Database {
       ...row
     }
     this.storeKitSubscriptions.set(
-      this.storeKitSubscriptionKey(
-        seeded.original_transaction_id,
-        seeded.environment
-      ),
+      this.storeKitSubscriptionKey(seeded.original_transaction_id, seeded.environment),
       seeded
     )
   }
@@ -325,9 +301,7 @@ export class MockD1Database {
   }
 
   /** Seeds an already-attested key so tests can exercise revocation and installation binding. */
-  seedAppAttestKey(
-    row: Partial<MobileAppAttestKeyRow> & { key_id: string }
-  ): void {
+  seedAppAttestKey(row: Partial<MobileAppAttestKeyRow> & { key_id: string }): void {
     this.mobileAppAttestKeys.set(row.key_id, {
       installation_id: "seeded-installation",
       app_bundle_id: "com.example.app",
@@ -345,11 +319,7 @@ export class MockD1Database {
     return Array.from(this.routePopularityRows.values())
   }
 
-  seedRouteLease(
-    routeKey: string,
-    expiresAt: string,
-    leaseId = "seeded-lease"
-  ): void {
+  seedRouteLease(routeKey: string, expiresAt: string, leaseId = "seeded-lease"): void {
     this.routeLeases.set(routeKey, {
       route_key: routeKey,
       lease_id: leaseId,
@@ -358,25 +328,15 @@ export class MockD1Database {
     })
   }
 
-  private entitlementKey(
-    hash: string,
-    environment: string,
-    bundleId: string
-  ): string {
+  private entitlementKey(hash: string, environment: string, bundleId: string): string {
     return `${hash}:${environment}:${bundleId}`
   }
 
-  private storeKitSubscriptionKey(
-    originalTransactionId: string,
-    environment: string
-  ): string {
+  private storeKitSubscriptionKey(originalTransactionId: string, environment: string): string {
     return `${originalTransactionId}:${environment}`
   }
 
-  private storeKitTransactionKey(
-    transactionId: string,
-    environment: string
-  ): string {
+  private storeKitTransactionKey(transactionId: string, environment: string): string {
     return `${transactionId}:${environment}`
   }
 
@@ -393,10 +353,7 @@ export class MockD1Database {
     return (latestSignedDate ?? "") >= (existing.latest_signed_date ?? "")
   }
 
-  private storeKitRowActive(
-    row: StoreKitSubscriptionRow,
-    resolvedAt: string
-  ): boolean {
+  private storeKitRowActive(row: StoreKitSubscriptionRow, resolvedAt: string): boolean {
     if (
       row.status !== "active_trial" &&
       row.status !== "active_paid" &&
@@ -428,13 +385,9 @@ export class MockD1Database {
             (left.environment === "Production" ? 0 : 1) -
               (right.environment === "Production" ? 0 : 1) ||
             right.perpetual - left.perpetual ||
-            (right.access_expires_at ?? "").localeCompare(
-              left.access_expires_at ?? ""
-            ) ||
+            (right.access_expires_at ?? "").localeCompare(left.access_expires_at ?? "") ||
             right.last_verified_at.localeCompare(left.last_verified_at) ||
-            right.latest_transaction_id.localeCompare(
-              left.latest_transaction_id
-            )
+            right.latest_transaction_id.localeCompare(left.latest_transaction_id)
           )
         })[0] ?? null
     )
@@ -448,24 +401,18 @@ export class MockD1Database {
       Array.from(this.mobileEntitlements.values())
         .filter(
           (candidate) =>
-            candidate.installation_id === installationId &&
-            candidate.app_bundle_id === bundleId
+            candidate.installation_id === installationId && candidate.app_bundle_id === bundleId
         )
         .sort((left, right) => {
           const leftRank =
-            left.latest_entitlement_tier === "pro" &&
-            left.latest_subscription_status === "active"
+            left.latest_entitlement_tier === "pro" && left.latest_subscription_status === "active"
               ? 0
               : 1
           const rightRank =
-            right.latest_entitlement_tier === "pro" &&
-            right.latest_subscription_status === "active"
+            right.latest_entitlement_tier === "pro" && right.latest_subscription_status === "active"
               ? 0
               : 1
-          return (
-            leftRank - rightRank ||
-            left.first_seen_at.localeCompare(right.first_seen_at)
-          )
+          return leftRank - rightRank || left.first_seen_at.localeCompare(right.first_seen_at)
         })[0] ?? null
     )
   }
@@ -482,35 +429,20 @@ export class MockD1Database {
       row.consumed_at = consumedAt
       return { challengeId } as T
     }
-    if (
-      sql.includes("FROM mobile_sessions") &&
-      sql.includes("WHERE session_id = ?")
-    ) {
+    if (sql.includes("FROM mobile_sessions") && sql.includes("WHERE session_id = ?")) {
       const row = this.mobileSessions.get(String(bindings[0]))
       return (row ? this.sessionResult(row) : null) as T | null
     }
-    if (
-      sql.includes("FROM mobile_sessions") &&
-      sql.includes("WHERE refresh_token_hash = ?")
-    ) {
-      const sessionId = this.mobileSessionsByRefreshHash.get(
-        String(bindings[0])
-      )
+    if (sql.includes("FROM mobile_sessions") && sql.includes("WHERE refresh_token_hash = ?")) {
+      const sessionId = this.mobileSessionsByRefreshHash.get(String(bindings[0]))
       const row = sessionId ? this.mobileSessions.get(sessionId) : null
       return (row ? this.sessionResult(row) : null) as T | null
     }
     if (sql.includes("FROM mobile_entitlements")) {
       const row = sql.includes("WHERE installation_id = ?")
-        ? this.selectInstallationEntitlement(
-            String(bindings[0]),
-            String(bindings[1])
-          )
+        ? this.selectInstallationEntitlement(String(bindings[0]), String(bindings[1]))
         : this.mobileEntitlements.get(
-            this.entitlementKey(
-              String(bindings[0]),
-              String(bindings[1]),
-              String(bindings[2])
-            )
+            this.entitlementKey(String(bindings[0]), String(bindings[1]), String(bindings[2]))
           )
       return (row ? this.entitlementResult(row) : null) as T | null
     }
@@ -604,10 +536,7 @@ export class MockD1Database {
         revoked_at: (bindings[11] as string | null) ?? null
       }
       this.mobileSessions.set(row.session_id, row)
-      this.mobileSessionsByRefreshHash.set(
-        row.refresh_token_hash,
-        row.session_id
-      )
+      this.mobileSessionsByRefreshHash.set(row.refresh_token_hash, row.session_id)
       return
     }
 
@@ -620,10 +549,7 @@ export class MockD1Database {
       session.refresh_token_hash = String(bindings[0])
       session.refresh_token_expires_at = String(bindings[1])
       session.last_refreshed_at = String(bindings[2])
-      this.mobileSessionsByRefreshHash.set(
-        session.refresh_token_hash,
-        session.session_id
-      )
+      this.mobileSessionsByRefreshHash.set(session.refresh_token_hash, session.session_id)
       return
     }
 
@@ -633,18 +559,12 @@ export class MockD1Database {
       if (
         installationId &&
         Array.from(this.mobileEntitlements.values()).some(
-          (row) =>
-            row.installation_id === installationId &&
-            row.app_bundle_id === bundleId
+          (row) => row.installation_id === installationId && row.app_bundle_id === bundleId
         )
       ) {
         return
       }
-      const key = this.entitlementKey(
-        String(bindings[0]),
-        String(bindings[3]),
-        bundleId
-      )
+      const key = this.entitlementKey(String(bindings[0]), String(bindings[3]), bundleId)
       if (this.mobileEntitlements.has(key)) return
       this.mobileEntitlements.set(key, {
         app_transaction_hash: String(bindings[0]),
@@ -669,10 +589,7 @@ export class MockD1Database {
     if (sql.includes("UPDATE mobile_entitlements")) {
       const installationId = String(bindings[7])
       const bundleId = String(bindings[8])
-      const existing = this.selectInstallationEntitlement(
-        installationId,
-        bundleId
-      )
+      const existing = this.selectInstallationEntitlement(installationId, bundleId)
       if (!existing) return
 
       this.mobileEntitlements.delete(
@@ -685,8 +602,7 @@ export class MockD1Database {
       existing.app_transaction_hash = String(bindings[0])
       existing.app_transaction_id = String(bindings[1])
       existing.app_store_environment = bindings[2] as "sandbox" | "production"
-      existing.latest_entitlement_tier = bindings[3] as
-        "trial" | "expired" | "pro"
+      existing.latest_entitlement_tier = bindings[3] as "trial" | "expired" | "pro"
       existing.latest_subscription_status = bindings[4] as "none" | "active"
       existing.last_seen_at = String(bindings[5])
       existing.last_sync_at = String(bindings[6])
@@ -739,33 +655,22 @@ export class MockD1Database {
         last_seen_at: String(bindings[7]),
         // Mirrors the real ON CONFLICT clause, which deliberately leaves revoked_at alone so a
         // bootstrap cannot un-revoke a key.
-        revoked_at: existing
-          ? existing.revoked_at
-          : ((bindings[8] as string | null) ?? null)
+        revoked_at: existing ? existing.revoked_at : ((bindings[8] as string | null) ?? null)
       })
       return
     }
 
     if (sql.includes("INSERT INTO storekit_subscriptions")) {
-      const key = this.storeKitSubscriptionKey(
-        String(bindings[0]),
-        String(bindings[1])
-      )
+      const key = this.storeKitSubscriptionKey(String(bindings[0]), String(bindings[1]))
       const existing = this.storeKitSubscriptions.get(key)
       const revocationDate = (bindings[13] as string | null) ?? null
       const latestSignedDate = (bindings[17] as string | null) ?? null
-      if (
-        existing &&
-        !this.storeKitWriteWins(revocationDate, latestSignedDate, existing)
-      )
-        return
+      if (existing && !this.storeKitWriteWins(revocationDate, latestSignedDate, existing)) return
       const row: StoreKitSubscriptionRow = {
         original_transaction_id: String(bindings[0]),
         environment: String(bindings[1]),
-        installation_id:
-          (bindings[2] as string | null) ?? existing?.installation_id ?? null,
-        app_account_token:
-          (bindings[3] as string | null) ?? existing?.app_account_token ?? null,
+        installation_id: (bindings[2] as string | null) ?? existing?.installation_id ?? null,
+        app_account_token: (bindings[3] as string | null) ?? existing?.app_account_token ?? null,
         latest_transaction_id: String(bindings[4]),
         app_bundle_id: String(bindings[5]),
         product_id: String(bindings[6]),
@@ -777,36 +682,19 @@ export class MockD1Database {
         is_trial: Number(bindings[12]),
         revocation_date: revocationDate,
         revocation_reason: (bindings[14] as number | null) ?? null,
-        product_type:
-          (bindings[15] as string | null) ?? existing?.product_type ?? null,
+        product_type: (bindings[15] as string | null) ?? existing?.product_type ?? null,
         offer_discount_type:
-          (bindings[16] as string | null) ??
-          existing?.offer_discount_type ??
-          null,
-        latest_signed_date:
-          latestSignedDate ?? existing?.latest_signed_date ?? null,
-        auto_renew_status:
-          (bindings[18] as number | null) ??
-          existing?.auto_renew_status ??
-          null,
+          (bindings[16] as string | null) ?? existing?.offer_discount_type ?? null,
+        latest_signed_date: latestSignedDate ?? existing?.latest_signed_date ?? null,
+        auto_renew_status: (bindings[18] as number | null) ?? existing?.auto_renew_status ?? null,
         auto_renew_product_id:
-          (bindings[19] as string | null) ??
-          existing?.auto_renew_product_id ??
-          null,
-        expiration_intent:
-          (bindings[20] as number | null) ??
-          existing?.expiration_intent ??
-          null,
+          (bindings[19] as string | null) ?? existing?.auto_renew_product_id ?? null,
+        expiration_intent: (bindings[20] as number | null) ?? existing?.expiration_intent ?? null,
         is_in_billing_retry:
-          (bindings[21] as number | null) ??
-          existing?.is_in_billing_retry ??
-          null,
+          (bindings[21] as number | null) ?? existing?.is_in_billing_retry ?? null,
         price_increase_status:
-          (bindings[22] as number | null) ??
-          existing?.price_increase_status ??
-          null,
-        renewal_price:
-          (bindings[23] as number | null) ?? existing?.renewal_price ?? null,
+          (bindings[22] as number | null) ?? existing?.price_increase_status ?? null,
+        renewal_price: (bindings[23] as number | null) ?? existing?.renewal_price ?? null,
         currency: (bindings[24] as string | null) ?? existing?.currency ?? null,
         last_verified_at: String(bindings[25]),
         created_at: existing?.created_at ?? String(bindings[26]),
@@ -817,34 +705,22 @@ export class MockD1Database {
     }
 
     if (sql.includes("INSERT INTO storekit_transactions")) {
-      const key = this.storeKitTransactionKey(
-        String(bindings[0]),
-        String(bindings[1])
-      )
+      const key = this.storeKitTransactionKey(String(bindings[0]), String(bindings[1]))
       const existing = this.storeKitTransactions.get(key)
       const revocationDate = (bindings[12] as string | null) ?? null
       const latestSignedDate = (bindings[19] as string | null) ?? null
-      if (
-        existing &&
-        !this.storeKitWriteWins(revocationDate, latestSignedDate, existing)
-      )
-        return
+      if (existing && !this.storeKitWriteWins(revocationDate, latestSignedDate, existing)) return
       const row: StoreKitTransactionRow = {
         transaction_id: String(bindings[0]),
         environment: String(bindings[1]),
         original_transaction_id: String(bindings[2]),
         web_order_line_item_id:
-          (bindings[3] as string | null) ??
-          existing?.web_order_line_item_id ??
-          null,
-        installation_id:
-          (bindings[4] as string | null) ?? existing?.installation_id ?? null,
-        app_account_token:
-          (bindings[5] as string | null) ?? existing?.app_account_token ?? null,
+          (bindings[3] as string | null) ?? existing?.web_order_line_item_id ?? null,
+        installation_id: (bindings[4] as string | null) ?? existing?.installation_id ?? null,
+        app_account_token: (bindings[5] as string | null) ?? existing?.app_account_token ?? null,
         app_bundle_id: String(bindings[6]),
         product_id: String(bindings[7]),
-        purchase_date:
-          (bindings[8] as string | null) ?? existing?.purchase_date ?? null,
+        purchase_date: (bindings[8] as string | null) ?? existing?.purchase_date ?? null,
         expires_at: (bindings[9] as string | null) ?? null,
         access_expires_at: (bindings[10] as string | null) ?? null,
         perpetual: Number(bindings[11]),
@@ -853,14 +729,10 @@ export class MockD1Database {
         status: String(bindings[14]),
         pro_active: Number(bindings[15]),
         source: String(bindings[16]),
-        product_type:
-          (bindings[17] as string | null) ?? existing?.product_type ?? null,
+        product_type: (bindings[17] as string | null) ?? existing?.product_type ?? null,
         offer_discount_type:
-          (bindings[18] as string | null) ??
-          existing?.offer_discount_type ??
-          null,
-        latest_signed_date:
-          latestSignedDate ?? existing?.latest_signed_date ?? null,
+          (bindings[18] as string | null) ?? existing?.offer_discount_type ?? null,
+        latest_signed_date: latestSignedDate ?? existing?.latest_signed_date ?? null,
         first_seen_at: existing?.first_seen_at ?? String(bindings[20]),
         last_seen_at: String(bindings[21])
       }
@@ -1036,9 +908,7 @@ export class MockD1Database {
 
     return Array.from(grouped.values())
       .sort(
-        (left, right) =>
-          right.count - left.count ||
-          right.lastSeenAt.localeCompare(left.lastSeenAt)
+        (left, right) => right.count - left.count || right.lastSeenAt.localeCompare(left.lastSeenAt)
       )
       .slice(0, limit)
   }
