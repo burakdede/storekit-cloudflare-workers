@@ -47,6 +47,28 @@ silently costs someone revenue or leaks access:
 - Notification processing, replay, and the reconciliation path.
 - Anything that decides what reaches a log or an HTTP response body.
 
+## How we stay correct against Apple's SDK
+
+`test/unit/storekit-apple-sdk-conformance.test.ts` is the guard, because every other test stubs the
+verifier boundary and so cannot notice Apple changing underneath us. It covers two kinds of drift:
+
+- **Value drift.** The policy compares against bare literals such as `"FREE_TRIAL"`,
+  `"Non-Consumable"`, offer type 1 and status 1 to 5. TypeScript cannot catch a literal that stops
+  matching Apple's enum, since both sides remain strings and numbers, so each one is asserted equal
+  to the SDK's own exported enum.
+- **Shape drift.** Type-level assignments prove Apple's decoded payload types still satisfy our
+  structural types, so a renamed or retyped field breaks `npm run typecheck`.
+
+It also runs Apple's real `SignedDataVerifier` under `Environment.LOCAL_TESTING`, which skips
+signature and chain checks but performs genuine decoding, schema validation and claim checks. If
+you add a field read from an Apple payload, pin it there.
+
+CI runs on every pull request, on `main`, and weekly on a schedule so a break that lands without
+anyone touching this repository still surfaces. A separate advisory job runs the conformance suite
+against `@apple/app-store-server-library@latest` rather than the pinned version, so a breaking Apple
+release is visible before the Dependabot PR arrives. That job is `continue-on-error` on purpose: it
+must never block a pull request on Apple's release timing.
+
 ## Style
 
 Prettier and ESLint are enforced; run `npm run format` to fix. Two conventions the tooling cannot

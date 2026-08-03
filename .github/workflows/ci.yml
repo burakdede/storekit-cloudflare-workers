@@ -2,10 +2,20 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+  # Apple ships SDK and server-side changes on their own schedule. A weekly run catches a break
+  # that lands without anyone touching this repository.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -20,6 +30,26 @@ jobs:
       - run: npm run cf:typegen
       - run: npm run format:check
       - run: npm run lint
+      # Typecheck is where Apple SDK signature and field-shape drift surfaces, via the type-level
+      # assertions in test/unit/storekit-apple-sdk-conformance.test.ts.
       - run: npm run typecheck
       - run: npm test
       - run: npx wrangler deploy --dry-run --outdir=/tmp/storekit-cloudflare-workers-dry-run
+
+  # Runs against the newest Apple SDK rather than the pinned one, so a breaking release is visible
+  # before Dependabot's PR lands. Advisory only: it must never block a PR on Apple's release timing.
+  apple-sdk-latest:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save @apple/app-store-server-library@latest
+      - name: Report the version under test
+        run: npm ls @apple/app-store-server-library || true
+      - run: npm run typecheck
+      - run: npx vitest run test/unit/storekit-apple-sdk-conformance.test.ts --coverage.enabled=false

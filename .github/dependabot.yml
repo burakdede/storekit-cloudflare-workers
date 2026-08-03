@@ -1,0 +1,26 @@
+version: 2
+
+updates:
+  # @apple/app-store-server-library is pinned exactly, so nothing surfaces a new release on its
+  # own. Dependabot opens the bump as a PR, and CI runs the conformance suite against it: any
+  # change to Apple's enums, payload field names, or verifier signatures fails the PR rather than
+  # reaching a deployment. Treat a failing bump as a signal to read Apple's changelog, not as a
+  # reason to loosen the pin.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # One PR for routine tooling, so the Apple SDK and Wrangler stay individually reviewable.
+      dev-tooling:
+        dependency-type: development
+        patterns: ["*"]
+        exclude-patterns: ["wrangler"]
+    labels: [dependencies]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [dependencies]
