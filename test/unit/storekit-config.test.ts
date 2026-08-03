@@ -68,8 +68,7 @@ describe("storekit configuration", () => {
 
   it("parses allowed product ids as a strict set", () => {
     const productIds = storeKitAllowedProductIds({
-      STOREKIT_ALLOWED_PRODUCT_IDS:
-        "com.example.app.pro.annual, com.example.app.pro.monthly,,"
+      STOREKIT_ALLOWED_PRODUCT_IDS: "com.example.app.pro.annual, com.example.app.pro.monthly,,"
     })
 
     expect(productIds).toEqual(
