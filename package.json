@@ -63,17 +63,17 @@
     "@apple/app-store-server-library": "3.1.0"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.5",
+    "@eslint/js": "10.0.1",
     "@types/node": "26.1.2",
     "@typescript-eslint/eslint-plugin": "8.65.0",
     "@typescript-eslint/parser": "8.65.0",
     "@vitest/coverage-v8": "4.1.10",
-    "eslint": "9.39.5",
+    "eslint": "10.8.0",
     "globals": "17.9.0",
     "husky": "9.1.7",
     "lint-staged": "17.3.0",
     "prettier": "3.9.6",
-    "typescript": "5.9.3",
+    "typescript": "7.0.2",
     "vitest": "4.1.10",
     "wrangler": "4.118.0"
   },
