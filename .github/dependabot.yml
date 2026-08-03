@@ -17,10 +17,24 @@ updates:
         dependency-type: development
         patterns: ["*"]
         exclude-patterns: ["wrangler"]
+    ignore:
+      # TypeScript 7 cannot be adopted here yet: no stable typescript-eslint release supports it.
+      # Even the newest declares `peerDependencies.typescript: ">=4.8.4 <6.1.0"`, so `npm ci` fails
+      # to resolve and every lint job dies. Dependabot proposed exactly this and CI caught it.
+      #
+      # Lift this the moment typescript-eslint ships a release whose TypeScript peer range admits
+      # 7.x, then bump both in the same commit. Check with:
+      #   npm view @typescript-eslint/eslint-plugin peerDependencies.typescript
+      - dependency-name: typescript
+        versions: [">=6.1.0"]
     labels: [dependencies]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      # Action majors land together; they are independent of each other and of the Apple SDK.
+      github-actions:
+        patterns: ["*"]
     labels: [dependencies]
