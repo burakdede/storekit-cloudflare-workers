@@ -9,6 +9,21 @@ these documents when Apple changes notification fields or API behavior:
 - [App Store Server Notifications V2](https://developer.apple.com/documentation/appstoreservernotifications/app-store-server-notifications-v2)
 - [Receiving Notifications](https://developer.apple.com/documentation/appstoreservernotifications/receiving-app-store-server-notifications)
 - [Responding to Notifications](https://developer.apple.com/documentation/AppStoreServerNotifications/responding-to-app-store-server-notifications)
+- [JWSRenewalInfoDecodedPayload](https://developer.apple.com/documentation/appstoreserverapi/jwsrenewalinfodecodedpayload)
+- [Get Notification History](https://developer.apple.com/documentation/appstoreserverapi/get-notification-history)
+- [Send Consumption Information](https://developer.apple.com/documentation/appstoreserverapi/send-consumption-information)
+- [Apple PKI root certificates](https://www.apple.com/certificateauthority/)
+
+## Fields this module depends on
+
+| Apple field                             | Why it matters here                                                    |
+| --------------------------------------- | ---------------------------------------------------------------------- |
+| `status` (subscription)                 | 1 active, 2 expired, 3 billing retry, 4 grace period, 5 revoked        |
+| `gracePeriodExpiresDate` (renewal info) | The real access deadline during status 4; `expiresDate` has passed     |
+| `offerDiscountType` (transaction)       | Distinguishes a free trial from a paid introductory offer              |
+| `revocationDate` / `revocationReason`   | Refunds and family-sharing revocations; terminal                       |
+| `signedDate`                            | Apple's signing time, used to order out-of-order notification delivery |
+| `type`                                  | Identifies a non-consumable, which never expires                       |
 
 The service intentionally treats Apple-signed data as authoritative only after signature, bundle,
 environment, product, and transaction identity validation. It does not implement legacy receipt or

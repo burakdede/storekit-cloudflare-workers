@@ -1,130 +1,245 @@
 # cf-worker-storekit2
 
-Server-authoritative StoreKit 2 verification and entitlement persistence for Cloudflare Workers and D1.
+Drop-in, server-authoritative **StoreKit 2** for **Cloudflare Workers + D1**.
 
-This project is a Worker repository, not a hosted service. It gives you the Apple verification,
-entitlement policy, D1 schema, idempotent App Store Server Notifications V2 handling, and a small
-reference HTTP Worker. You supply your application's authentication and account/installation model.
+Copy one directory, apply one schema, set four secrets, mount one handler. You get Apple JWS
+verification, a correct entitlement engine, idempotent App Store Server Notifications V2, and the
+operational Apple calls — without writing any of it yourself.
 
-## What it does
+```ts
+import { createStoreKitHandler } from "./storekit"
 
-- Verifies Apple-signed transaction and notification JWS values with Apple’s official server library.
-- Checks bundle ID, environment, transaction identity, and a closed product allow-list.
-- Uses Apple transaction and subscription-status lookups when configured.
-- Supports configurable fail-open/fail-closed behavior when Apple lookups are unavailable.
-- Resolves paid, introductory-trial, grace-period, billing-retry, expired, revoked, and refunded states.
-- Persists transaction audit rows, subscription projections, and notification replay state in D1.
-- Uses D1 batches for atomic notification plus projection writes.
-- Accepts valid transactionless V2 notification payloads without inventing entitlement state.
-- Re-evaluates expiry when reading an entitlement instead of trusting an old boolean.
+const storekit = createStoreKitHandler<Env>({
+  authenticate: async (request, env) => {
+    const session = await mySessionFrom(request, env)
+    return session ? { accountId: session.userId } : null
+  }
+})
 
-## What it does not do
-
-- It does not authenticate your users, installations, or app-account tokens. Implement `src/auth.ts`.
-- It does not grant entitlement from a client product ID, receipt, expiry, price, or local premium flag.
-- It does not automatically reconcile missed notifications. Schedule your own Apple history/status
-  reconciliation using the service APIs and operational procedures in `docs/operations.md`.
-- It does not provide a dashboard, billing UI, webhook queue, analytics pipeline, or email service.
-- It does not support StoreKit 1 receipt verification or legacy App Store Server Notifications V1.
-- It does not make App Store Connect API credentials safe to expose to an iOS client; they remain
-  Worker secrets.
-
-## Five-minute setup
-
-Prerequisites: Node.js 22+, an authenticated Wrangler session, and a Cloudflare account.
-
-```bash
-git clone https://github.com/YOUR_ORG/cf-worker-storekit2.git
-cd cf-worker-storekit2
-npm install
-npx wrangler login
-npx wrangler d1 create cf-worker-storekit2
+export default {
+  async fetch(request, env, ctx) {
+    return (
+      (await storekit.fetch(request, env, ctx)) ?? myRoutes(request, env, ctx)
+    )
+  }
+}
 ```
 
-Copy the returned database ID into `wrangler.jsonc` and choose your real values for:
+That's the whole integration. `fetch` returns `null` for non-StoreKit paths, so it composes with
+whatever router you already have.
 
-- `STOREKIT_BUNDLE_ID`
-- `STOREKIT_ALLOWED_PRODUCT_IDS`
-- `STOREKIT_ALLOWED_ENVIRONMENTS`
-- `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK`
+---
 
-Generate binding types and apply the schema:
+## Why this exists
+
+Server-side StoreKit has a handful of details that are easy to get wrong and expensive when you do.
+This module gets them right, and the tests say so:
+
+**A billing grace period does not mean "expired."** When a renewal fails, Apple keeps serving the
+customer while it retries the payment — but the transaction's own `expiresDate` is already in the
+past. Judge access on `expiresDate` and you cut off paying customers for the entire grace period.
+This module resolves a separate `accessExpiresAt` from the verified `gracePeriodExpiresDate`.
+
+**A free trial is not the same as an introductory offer.** `offerType === 1` also covers _paid_
+pay-up-front and pay-as-you-go offers. Trials key off `offerDiscountType`.
+
+**Notifications arrive out of order.** Apple does not guarantee delivery order and retries failed
+deliveries for days. A late `DID_RENEW` landing after an `EXPIRED` will rewind your state unless
+writes are guarded — and guarded on _Apple's_ signing time, because a late-arriving old event has a
+newer server clock reading. Revocations bypass the guard, because a refund is terminal.
+
+**`REFUND` carries no subscription status.** Handlers that only act on `data.status` never revoke
+access on a refund.
+
+**Non-consumables have no `expiresDate`.** Treating a missing expiry as expired revokes every
+lifetime unlock.
+
+---
+
+## What you get
+
+- **Verification** — signature and Apple certificate chain, bundle ID, environment, closed product
+  allow-list, transaction identity, and an Apple re-lookup whose response only replaces the client
+  copy after its identity claims match.
+- **Entitlement policy** — paid, free trial, grace period, billing retry, expired, revoked,
+  refunded, and perpetual, resolved from verified claims only. Pure and I/O-free, so you can test
+  your tier rules against plain objects.
+- **Renewal metadata** — auto-renew status and product, expiration intent, billing retry, price
+  increase status, renewal price and currency.
+- **Persistence** — entitlement projection, transaction audit trail, and a notification replay
+  ledger in D1, written in atomic batches.
+- **A mountable handler** — sync, entitlement read, and the Apple webhook, with request validation
+  and error mapping that never leaks which check rejected a payload.
+- **Config validation** — every problem reported at once, secret presence without secret values.
+- **Operational Apple calls** — test notifications, notification-history replay for outage
+  recovery, transaction and refund history, order lookup, renewal-date extension, and consumption
+  information for `CONSUMPTION_REQUEST`.
+
+## What you supply
+
+**Authentication.** A StoreKit transaction proves _that a purchase happened_, never _who it belongs
+to_. Only your app knows that, so `authenticate` is yours to implement. It ships failing closed.
+
+---
+
+## Setup
+
+### 1. Get the code
+
+Either clone this repository as a standalone Worker, or vendor the module into an existing one:
 
 ```bash
-npm run cf:typegen
-npm run db:migrate:local
-npm run dev
+cp -r src/storekit /path/to/your-worker/src/
+npm install @apple/app-store-server-library
 ```
 
-Before deploying, replace the intentionally fail-closed `src/auth.ts` adapter with your existing
-session/JWT/App Attest/authentication integration. It must return an `installationId` and the exact
-authenticated `appBundleId`; never derive either from an untrusted request body or header.
+The directory imports nothing outside itself except the Apple library — a test enforces that, so it
+stays copyable.
 
-Configure Apple credentials as Wrangler secrets:
+### 2. Configure Wrangler
+
+```jsonc
+{
+  "compatibility_date": "2026-08-03",
+  "compatibility_flags": ["nodejs_compat"], // required: the Apple library needs Node built-ins
+  "vars": {
+    "STOREKIT_ALLOWED_ENVIRONMENTS": "Production",
+    "STOREKIT_BUNDLE_ID": "com.example.app",
+    "STOREKIT_ALLOWED_PRODUCT_IDS": "com.example.app.pro.monthly",
+    "APP_STORE_APP_APPLE_ID": "1234567890"
+  },
+  "d1_databases": [
+    { "binding": "STOREKIT_DB", "database_name": "...", "database_id": "..." }
+  ]
+}
+```
+
+Using a different binding name? Pass it through: `database: (env) => env.MY_DB`.
+
+### 3. Create the tables
+
+```bash
+npx wrangler d1 create cf-worker-storekit2   # copy the id into wrangler.jsonc
+npm run db:migrate:remote                    # or: wrangler d1 execute <DB> --file=src/storekit/schema.sql
+```
+
+### 4. Set the Apple secrets
 
 ```bash
 npx wrangler secret put APP_STORE_CONNECT_ISSUER_ID
 npx wrangler secret put APP_STORE_CONNECT_KEY_ID
-npx wrangler secret put APP_STORE_CONNECT_PRIVATE_KEY
-npx wrangler secret put APPLE_ROOT_CERTIFICATES_PEM
-npx wrangler secret put APP_STORE_APP_APPLE_ID
+npx wrangler secret put APP_STORE_CONNECT_PRIVATE_KEY   # the whole .p8, BEGIN/END lines included
+npx wrangler secret put APPLE_ROOT_CERTIFICATES_PEM     # concatenated Apple roots
 ```
 
-Apply the remote migration and deploy:
+Where each value comes from — and how to convert Apple's root certificates to PEM — is in
+[`docs/configuration.md`](docs/configuration.md).
+
+### 5. Implement `authenticate`, then deploy
 
 ```bash
-npm run db:migrate:remote
-npm run release:check
-npm run deploy
+npm run release:check && npm run deploy
 ```
 
-The reference Worker exposes:
+Check `GET /health`: it runs `describeStoreKitConfig` and lists every configuration problem,
+reporting which secrets are present without ever revealing a value.
 
-| Method | Path                             | Authentication             |
-| ------ | -------------------------------- | -------------------------- |
-| `POST` | `/v1/storekit/transactions/sync` | Your `src/auth.ts` adapter |
-| `GET`  | `/v1/storekit/entitlement`       | Your `src/auth.ts` adapter |
-| `POST` | `/v1/storekit/notifications`     | Apple JWS verification     |
-| `GET`  | `/health`                        | Public                     |
+### 6. Point Apple at the webhook
 
-Apple must be configured to send App Store Server Notifications V2 to the deployed notification URL.
-Return success for handled notifications and an error for failures so Apple can retry. See
-[`docs/operations.md`](docs/operations.md) for outage recovery and monitoring.
+In App Store Connect → your app → **App Information → App Store Server Notifications**, set the
+**Version 2** URL to `https://your-worker.example.com/storekit/notifications`. Then prove it works:
 
-## Architecture
-
-```text
-your auth/router ─┐
-                  ├─ storekit-service ── storekit.ts ── Apple SDK + Apple APIs
-Apple webhook ────┘          │
-                             └─ storekit-d1 ── Cloudflare D1
-                                  │
-                         entitlement policy core
+```ts
+await requestStoreKitTestNotification(env)
 ```
 
-The reusable public surface is [`src/storekit-module.ts`](src/storekit-module.ts). The reference
-HTTP Worker is intentionally thin. The policy core has no Apple SDK, HTTP, or database dependency.
+---
 
-## Configuration and security
+## Routes
 
-Read [`docs/configuration.md`](docs/configuration.md) before production use and
-[`docs/security.md`](docs/security.md) before publishing an integration. Apple’s current server
-contracts are linked in [`docs/apple-contract.md`](docs/apple-contract.md).
+| Method | Path                          | Authentication        |
+| ------ | ----------------------------- | --------------------- |
+| `POST` | `/storekit/transactions/sync` | your `authenticate`   |
+| `GET`  | `/storekit/entitlement`       | your `authenticate`   |
+| `POST` | `/storekit/notifications`     | Apple's JWS signature |
+
+Override any path via `paths: { sync: "/api/v1/iap/sync" }`.
+
+## The iOS side
+
+Send only Apple-signed material. The server ignores any client-asserted status, expiry, price, or
+premium flag.
+
+```swift
+for await result in Transaction.updates {
+    guard case .verified(let transaction) = result else { continue }
+    try await api.post("/storekit/transactions/sync", [
+        "signedTransactionJWS": result.jwsRepresentation
+    ])
+    await transaction.finish()
+}
+```
+
+Call sync after purchase, after restore, on `Transaction.updates`, and at launch. Gate features on
+**`accessExpiresAt`**, not `expiresAt`.
+
+Setting `appAccountToken` on `Product.purchase` and pinning it via `expectedAppAccountToken` in
+`authenticate` is what stops a signed transaction being replayed onto another account.
+
+---
+
+## Beyond the bundled routes
+
+The service layer has no HTTP dependency, so a GraphQL API, Durable Object or queue consumer can
+call it directly:
+
+```ts
+const { snapshot } = await syncStoreKitTransaction(
+  {
+    signedTransactionJWS,
+    installationId: userId,
+    appBundleId,
+    expectedAppAccountToken
+  },
+  { apple: env, d1: env.STOREKIT_DB }
+)
+```
+
+And `resolveStoreKitEntitlementCore` is the pure policy kernel — no Apple SDK, no D1, no HTTP.
+
+---
+
+## Documentation
+
+| Document                                          | Contents                                               |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| [configuration.md](docs/configuration.md)         | Every variable and secret, where to get it, trade-offs |
+| [security.md](docs/security.md)                   | Trust boundaries and the full verification chain       |
+| [operations.md](docs/operations.md)               | Webhook behaviour, outage recovery, troubleshooting    |
+| [apple-contract.md](docs/apple-contract.md)       | Apple references and how this maps to them             |
+| [release-checklist.md](docs/release-checklist.md) | Pre-deployment verification                            |
+
+## Scope
+
+**Covered:** auto-renewable subscriptions, non-consumables, refunds and revocations, billing grace
+periods and retry, introductory/promotional offers, renewal metadata, App Store Server Notifications
+V2 including transaction-less events, and both Apple environments simultaneously.
+
+**Not covered:** consumable balance ledgers (crediting is app-specific), app-transaction
+verification, OCSP revocation checking (Apple's SDK OCSP path calls `Response.buffer()`, which the
+Workers runtime does not provide — signature and chain validation are unaffected), the Advanced
+Commerce API, StoreKit 1 receipts, and V1 notifications.
 
 ## Development
 
 ```bash
-npm run format:check
-npm run lint
-npm run typecheck
-npm test
-npx wrangler deploy --dry-run --outdir=/tmp/cf-worker-storekit2-dry-run
+npm install
+npm run release:check   # format, lint, typecheck, tests, and a Worker dry-run build
 ```
 
-Tests use injectable verifier/runtime boundaries and D1 fakes; no Apple private keys or production
-transactions are stored in this repository. A real Apple-signed fixture test should be added only
-with non-sensitive StoreKit test material.
+Tests use injectable verifier boundaries and a D1 fake; no Apple keys or production transactions are
+in this repository.
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](LICENSE).
