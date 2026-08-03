@@ -231,6 +231,30 @@ verification, OCSP revocation checking (Apple's SDK OCSP path calls `Response.bu
 Workers runtime does not provide; signature and chain validation are unaffected), the Advanced
 Commerce API, StoreKit 1 receipts, and V1 notifications.
 
+## How this stays correct against Apple
+
+The Apple SDK is pinned to an exact version, and
+`test/unit/storekit-apple-sdk-conformance.test.ts` keeps that pin honest. It asserts every Apple
+literal the policy compares against (`"FREE_TRIAL"`, `"Non-Consumable"`, offer type `1`, status `1`
+to `5`) is still equal to the SDK's own exported enum, pins the payload shapes at the type level so
+a renamed field fails `typecheck`, and runs Apple's real `SignedDataVerifier` under
+`Environment.LOCAL_TESTING` so decoding is exercised for real rather than stubbed.
+
+That matters because TypeScript cannot catch a literal that stops matching an enum: both sides stay
+strings and numbers. Without those assertions an SDK bump could misclassify every trial as paid, or
+revoke every lifetime purchase, with a green suite.
+
+CI runs on every pull request, on `main`, and weekly. Dependabot raises SDK bumps as pull requests
+that must pass the conformance suite, and a separate advisory job runs that suite against
+`@apple/app-store-server-library@latest` so a breaking Apple release is visible before the bump
+arrives.
+
+**What this does not prove:** certificate chain validation (Apple's test certificates are not in
+the npm tarball), OCSP revocation checking (disabled under Workers), and anything about Apple's
+live servers. CI proves this module still agrees with the Apple SDK; it does not prove the SDK
+still agrees with Apple. Sandbox testing before release is not optional. The full breakdown is in
+[docs/apple-contract.md](docs/apple-contract.md#what-is-not-verified-here).
+
 ## Development
 
 ```bash

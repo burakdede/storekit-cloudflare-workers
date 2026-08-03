@@ -63,11 +63,26 @@ It also runs Apple's real `SignedDataVerifier` under `Environment.LOCAL_TESTING`
 signature and chain checks but performs genuine decoding, schema validation and claim checks. If
 you add a field read from an Apple payload, pin it there.
 
+The value assertions are mutation-tested, not assumed. If you add one, confirm it fails when you
+break the thing it protects; an assertion that cannot fail is worse than none, because it reads as
+coverage.
+
 CI runs on every pull request, on `main`, and weekly on a schedule so a break that lands without
 anyone touching this repository still surfaces. A separate advisory job runs the conformance suite
 against `@apple/app-store-server-library@latest` rather than the pinned version, so a breaking Apple
 release is visible before the Dependabot PR arrives. That job is `continue-on-error` on purpose: it
 must never block a pull request on Apple's release timing.
+
+### What CI cannot tell you
+
+CI proves this module still agrees with the Apple SDK. It does not prove the SDK still agrees with
+Apple's servers. Certificate chain validation, OCSP, Apple's live API, and real notification
+delivery are all outside its reach, for reasons listed in
+[docs/apple-contract.md](docs/apple-contract.md#what-is-not-verified-here).
+
+So if your change touches verification or entitlement resolution, a green suite is necessary and
+not sufficient. Say in the pull request whether you exercised it in sandbox, and which paths. The
+sandbox items in [docs/release-checklist.md](docs/release-checklist.md) are the list.
 
 ## Style
 
