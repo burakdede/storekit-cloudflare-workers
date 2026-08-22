@@ -61,7 +61,7 @@
   "types": "./dist/index.d.ts",
   "main": "./dist/index.js",
   "bin": {
-    "storekit-cloudflare-workers": "./bin/storekit.mjs"
+    "storekit-cloudflare-workers": "bin/storekit.mjs"
   },
   "files": [
     "dist",

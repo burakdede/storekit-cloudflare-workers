@@ -45,7 +45,11 @@ describe("published package manifest", () => {
     expect(manifest.files).toContain("migrations")
     expect(manifest.files).toContain("dist")
     expect(manifest.files).toContain("bin")
-    expect(existsSync(join(ROOT, manifest.bin["storekit-cloudflare-workers"]!))).toBe(true)
+    const cli = manifest.bin["storekit-cloudflare-workers"]!
+    expect(existsSync(join(ROOT, cli))).toBe(true)
+    // npm's own validator rejects a "./" prefix here and silently drops the whole entry at
+    // publish time, so the tarball would ship with no CLI at all.
+    expect(cli.startsWith("./")).toBe(false)
     expect(existsSync(join(ROOT, "migrations/0001_storekit.sql"))).toBe(true)
   })
 
