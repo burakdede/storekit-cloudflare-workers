@@ -15,7 +15,6 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: npm
     permissions:
       contents: read
       # Required for npm provenance: the published package is signed against this workflow run.
@@ -49,6 +48,8 @@ jobs:
       - name: Smoke-test the tarball in a scratch Worker
         run: node scripts/smoke-install.mjs
 
+      # Provenance is requested here rather than in publishConfig, so a manual
+      # `npm publish` from a laptop is still possible: npm refuses provenance outside CI.
       - run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
