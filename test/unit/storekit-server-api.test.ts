@@ -6,7 +6,7 @@ import {
   lookUpStoreKitOrderId,
   requestStoreKitTestNotification,
   sendStoreKitConsumptionInformation
-} from "../../src/storekit/server-api"
+} from "../../src/server-api"
 import {
   ConsumptionStatus,
   DeliveryStatus,
@@ -15,8 +15,8 @@ import {
   RefundPreference,
   UserStatus
 } from "@apple/app-store-server-library"
-import { StoreKitConfigError } from "../../src/storekit/errors"
-import type * as StoreKitVerification from "../../src/storekit/verification"
+import { StoreKitConfigError } from "../../src/errors"
+import type * as StoreKitVerification from "../../src/verification"
 
 function client() {
   return {
@@ -35,9 +35,9 @@ function client() {
 const sandboxClient = client()
 const productionClient = client()
 
-vi.mock("../../src/storekit/verification", async (importOriginal) => {
+vi.mock("../../src/verification", async (importOriginal) => {
   const actual = await importOriginal<typeof StoreKitVerification>()
-  const { storeKitConfiguredEnvironments } = await import("../../src/storekit/config")
+  const { storeKitConfiguredEnvironments } = await import("../../src/config")
   return {
     ...actual,
     // Mirror the real builder: it constructs one runtime per *configured* environment, which is

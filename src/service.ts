@@ -5,9 +5,9 @@
  * service combines Apple verification, entitlement policy, and the D1 adapter so a Worker can use
  * the module through one call per operation.
  */
-import { resolveStoreKitEntitlementCore } from "./entitlement"
-import { StoreKitVerificationError } from "./errors"
-import type { StoreKitEntitlementSnapshot, StoreKitEnv } from "./types"
+import { resolveStoreKitEntitlementCore } from "./entitlement.js"
+import { StoreKitVerificationError } from "./errors.js"
+import type { StoreKitEntitlementSnapshot, StoreKitEnv } from "./types.js"
 import {
   lookupStoreKitSubscriptionState,
   resolveStoreKitEntitlement,
@@ -16,7 +16,7 @@ import {
   type StoreKitRuntime,
   type VerifiedStoreKitNotification,
   type VerifiedStoreKitTransaction
-} from "./verification"
+} from "./verification.js"
 import {
   loadStoreKitSubscriptionByInstallation,
   persistStoreKitNotification,
@@ -24,7 +24,7 @@ import {
   storeKitNotificationExists,
   type StoreKitDatabase,
   type StoreKitSubscriptionRecord
-} from "./storage"
+} from "./storage.js"
 
 export interface StoreKitServiceConfig {
   apple: StoreKitEnv

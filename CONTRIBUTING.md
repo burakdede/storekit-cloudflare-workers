@@ -7,12 +7,16 @@ higher than usual and the reasons are written down below.
 
 ```bash
 npm install          # Node.js 22 or newer
-npm run cf:typegen   # after changing wrangler.jsonc
+npm run cf:typegen   # after changing example/wrangler.jsonc
 npm test
 ```
 
-`npm run release:check` runs everything CI runs: format, lint, typecheck, tests, and a Worker
-dry-run build. Run it before opening a pull request.
+`npm run release:check` runs everything CI runs: format, lint, typecheck, tests, the package build,
+a `npm pack` dry run, and a Worker dry-run build. Run it before opening a pull request.
+
+`src/` is the published package, `example/` is a Worker that consumes it by its published name (a
+Wrangler alias and a `tsconfig` path resolve that name to `src/` inside this repository), and
+`migrations/` ships in the tarball.
 
 You do not need Apple credentials to develop. Tests inject the verifier boundary and use a D1 fake,
 so no signed material or private key is ever required.
@@ -22,9 +26,14 @@ so no signed material or private key is ever required.
 **Never commit secrets or customer data.** No Apple private keys, no signed transactions or
 notification payloads, no bearer tokens, no customer identifiers. This includes test fixtures.
 
-**Keep `src/storekit/` self-contained.** It is vendored into other people's Workers by copying the
-directory. It may import `@apple/app-store-server-library` and nothing else outside itself. A test
-enforces this; if you add an import that reaches outside, the suite fails.
+**Keep `src/` self-contained.** It is published and runs inside other people's Workers. It may
+import `@apple/app-store-server-library` and nothing else outside itself, and it must not reference
+an ambient Cloudflare global such as `D1Database` or `ExecutionContext`: those come from a host's
+generated types, and a package that leans on them fails to typecheck wherever they are absent. Use
+the structural types in `src/cloudflare.ts` instead. Tests enforce both rules.
+
+**Give every relative import a `.js` extension.** The published build is plain `tsc` output, so
+`./service` would not resolve under Node ESM resolution. A test enforces it.
 
 **Keep the policy kernel pure.** `entitlement.ts` must have no Cloudflare, Apple SDK, database, or
 HTTP import. It is the piece people copy into other runtimes and test against plain objects.
@@ -32,9 +41,9 @@ HTTP import. It is the piece people copy into other runtimes and test against pl
 **Never trust a client claim.** Entitlement may only be derived from a verified Apple signature. If
 a change makes a request body, header, or query parameter influence entitlement, it is wrong.
 
-**Keep the two schema copies in sync.** `migrations/0001_storekit.sql` and
-`src/storekit/schema.sql` must stay byte-identical below their headers, because different adopters
-apply different ones. A test enforces this.
+**Ship schema changes as a new migration.** `migrations/` is published, and adopters apply it with
+Wrangler either from their repository or straight out of `node_modules`. Editing an applied
+migration in place breaks every existing deployment.
 
 ## Changes that need tests
 

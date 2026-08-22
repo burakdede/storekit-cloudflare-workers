@@ -34,7 +34,22 @@ jobs:
       # assertions in test/unit/storekit-apple-sdk-conformance.test.ts.
       - run: npm run typecheck
       - run: npm test
-      - run: npx wrangler deploy --dry-run --outdir=/tmp/storekit-cloudflare-workers-dry-run
+      - run: npm run build
+      - run: npx wrangler deploy --dry-run -c example/wrangler.jsonc --outdir=/tmp/storekit-example-dry-run
+
+  # The published tarball is what adopters actually consume, and none of the tests above touch it:
+  # they import `src/` directly, so an export map, a missing `.js` specifier, or an unshipped
+  # migration would pass everything and still break `npm install`.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/smoke-install.mjs
 
   # Runs against the newest Apple SDK rather than the pinned one, so a breaking release is visible
   # before Dependabot's PR lands. Advisory only: it must never block a PR on Apple's release timing.

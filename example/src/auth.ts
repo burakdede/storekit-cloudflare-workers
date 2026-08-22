@@ -9,7 +9,7 @@
  * deliberate. Never derive identity from a client-supplied header such as `X-Installation-Id`,
  * because anyone can send one and claim another customer's subscription.
  */
-import type { StoreKitRequestContext } from "./storekit"
+import type { StoreKitRequestContext } from "storekit-cloudflare-workers"
 
 export async function authenticateStoreKitRequest(
   request: Request,

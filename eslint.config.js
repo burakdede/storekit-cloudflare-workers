@@ -4,11 +4,11 @@ import tsParser from "@typescript-eslint/parser"
 import globals from "globals"
 
 export default [
-  { ignores: ["coverage/**", ".wrangler/**", "worker-configuration.d.ts"] },
+  { ignores: ["coverage/**", "dist/**", ".wrangler/**", "worker-configuration.d.ts"] },
   {
-    // src/storekit/ is meant to be vendored into other Workers, whose ESLint configs vary. It
-    // carries eslint-disable directives for hosts that still enable the base no-unused-vars rule
-    // on structural callback signatures; those are inert here and must not be reported as unused.
+    // src/ is published and read in hosts whose ESLint configs vary. It carries eslint-disable
+    // directives for hosts that still enable the base no-unused-vars rule on structural callback
+    // signatures; those are inert here and must not be reported as unused.
     linterOptions: { reportUnusedDisableDirectives: "off" }
   },
   js.configs.recommended,
@@ -43,7 +43,7 @@ export default [
     }
   },
   {
-    files: ["**/*.js"],
+    files: ["**/*.js", "**/*.mjs"],
     languageOptions: { globals: { ...globals.es2022, ...globals.node } }
   }
 ]

@@ -1,6 +1,6 @@
 # Release checklist
 
-## Publishing this repository
+## Publishing the package
 
 - [ ] Review the Apple contract links and the pinned `@apple/app-store-server-library` version.
 - [ ] Confirm the trademark and non-affiliation notices are present in README.md and
@@ -11,16 +11,25 @@
       not only against the pinned version:
       `npm i --no-save @apple/app-store-server-library@latest && npm run typecheck && npx vitest run test/unit/storekit-apple-sdk-conformance.test.ts`
 - [ ] Confirm no secrets, signed production transactions, or customer identifiers are tracked.
-- [ ] Confirm `wrangler.jsonc` still contains only placeholder values (`com.example.app`, the
-      all-zero database ID).
-- [ ] Confirm `src/auth.ts` still fails closed.
+- [ ] Confirm `example/wrangler.jsonc` still contains only placeholder values (`com.example.app`,
+      the all-zero database ID).
+- [ ] Confirm `example/src/auth.ts` still fails closed.
+- [ ] Bump the version and add a CHANGELOG entry.
+- [ ] Inspect the tarball: `npm pack --dry-run`. It must contain `dist/`, `migrations/`, `bin/` and
+      `src/`, and no `.dev.vars`, `worker-configuration.d.ts`, or test fixture.
+- [ ] Install the tarball into a scratch Worker and confirm it typechecks under `nodenext`
+      resolution and bundles: `npm i ./storekit-cloudflare-workers-*.tgz`,
+      `npx storekit-cloudflare-workers init`, `npx wrangler deploy --dry-run`.
+- [ ] Publish by pushing the tag: `git tag vX.Y.Z && git push --tags`. The release workflow runs
+      `release:check` and publishes with npm provenance. Publishing by hand is
+      `npm publish --provenance`, which needs the same checks run first.
 
 ## Adopting it in a deployment
 
 - [ ] Implement and review `authenticate` before deploying. It must derive identity from a verified
       credential, never from a request header or body.
 - [ ] Pin `expectedAppAccountToken` if your client sets `appAccountToken` on purchase.
-- [ ] Set every secret with `wrangler secret put`; verify with `GET /health`.
+- [ ] Set every secret with `wrangler secret put`; verify with `GET /storekit/health`.
 - [ ] Decide `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK` deliberately; see `docs/configuration.md`.
 - [ ] Confirm `STOREKIT_ALLOWED_PRODUCT_IDS` lists exactly the products that should grant access.
 - [ ] Confirm production allows only `Production`, and that any sandbox allowance is intentional.

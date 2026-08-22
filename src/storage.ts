@@ -5,8 +5,9 @@
  * any host application helper: it needs nothing but a `D1Database` binding. Callers decide which
  * installation and environments are authorized; this adapter only persists verified projections.
  */
-import { StoreKitPersistenceError } from "./errors"
-import type { StoreKitEntitlementSnapshot } from "./types"
+import type { StoreKitD1Database } from "./cloudflare.js"
+import { StoreKitPersistenceError } from "./errors.js"
+import type { StoreKitEntitlementSnapshot } from "./types.js"
 
 export interface StoreKitSubscriptionRecord {
   originalTransactionId: string
@@ -40,7 +41,7 @@ export interface StoreKitSubscriptionRecord {
  * The adapter takes a `D1Database` directly rather than an env object, so it never assumes what
  * your binding is called. Pass `env.STOREKIT_DB`, `env.DB`, or whatever your Worker declares.
  */
-export type StoreKitDatabase = D1Database
+export type StoreKitDatabase = StoreKitD1Database
 
 function requireStoreKitDb(db: StoreKitDatabase | undefined, operation: string): StoreKitDatabase {
   if (!db) {

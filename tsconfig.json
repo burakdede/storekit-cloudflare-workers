@@ -12,7 +12,13 @@
     "skipLibCheck": true,
     "allowJs": false,
     "resolveJsonModule": true,
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals"],
+    // The example Worker imports the package by its published name, so its code is exactly what an
+    // adopter writes. Only this repository needs the mapping.
+    "paths": {
+      "storekit-cloudflare-workers": ["./src/index.ts"],
+      "storekit-cloudflare-workers/*": ["./src/*.ts"]
+    }
   },
-  "include": ["src", "test", "worker-configuration.d.ts", "vitest.config.ts"]
+  "include": ["src", "test", "example", "worker-configuration.d.ts", "vitest.config.ts"]
 }

@@ -1,8 +1,9 @@
 /**
  * Drop-in server-side StoreKit 2 for Cloudflare Workers + D1.
  *
- * Copy this directory into a Worker, apply `schema.sql` to a D1 database, set the Apple secrets,
- * and mount `createStoreKitHandler`. See the project README for the full integration guide.
+ * Install the package, apply its D1 migration, set the Apple secrets, and mount
+ * `createStoreKitHandler` (or export `createStoreKitWorker` directly). See the README for the
+ * full integration guide.
  *
  * The design is server-authoritative: the iOS client submits Apple-signed JWS material and the
  * Worker verifies the signature, app identity, environment and product allow-list before any
@@ -22,14 +23,14 @@ export {
   storeKitConfiguredEnvironments,
   storeKitSandboxPreReleaseEnabled,
   type StoreKitConfigReport
-} from "./config"
+} from "./config.js"
 
 export {
   StoreKitConfigError,
   StoreKitPersistenceError,
   StoreKitVerificationError,
   type StoreKitVerificationDiagnostics
-} from "./errors"
+} from "./errors.js"
 
 export {
   STOREKIT_ENVIRONMENT,
@@ -39,7 +40,7 @@ export {
   type StoreKitEntitlementStatus,
   type StoreKitEnv,
   type StoreKitEnvironment
-} from "./types"
+} from "./types.js"
 
 export {
   resolveStoreKitEntitlementCore,
@@ -48,7 +49,7 @@ export {
   type StoreKitEntitlementInput,
   type StoreKitEntitlementRenewalInfo,
   type StoreKitEntitlementTransaction
-} from "./entitlement"
+} from "./entitlement.js"
 
 export {
   buildStoreKitRuntimes,
@@ -65,7 +66,7 @@ export {
   type VerifiedStoreKitNotification,
   type VerifiedStoreKitSubscriptionTransaction,
   type VerifiedStoreKitTransaction
-} from "./verification"
+} from "./verification.js"
 
 export {
   loadStoreKitSubscriptionByInstallation,
@@ -75,7 +76,7 @@ export {
   storeKitNotificationStatement,
   type StoreKitDatabase,
   type StoreKitSubscriptionRecord
-} from "./storage"
+} from "./storage.js"
 
 export {
   getStoreKitEntitlement,
@@ -88,7 +89,15 @@ export {
   type StoreKitServiceConfig,
   type StoreKitTransactionSyncInput,
   type StoreKitTransactionSyncResult
-} from "./service"
+} from "./service.js"
+
+export {
+  type StoreKitD1Database,
+  type StoreKitExecutionContext,
+  type StoreKitPreparedStatement
+} from "./cloudflare.js"
+
+export { createStoreKitWorker, type StoreKitWorker, type StoreKitWorkerOptions } from "./worker.js"
 
 export {
   createStoreKitHandler,
@@ -99,7 +108,7 @@ export {
   type StoreKitRequestContext,
   type StoreKitRoutePaths,
   type StoreKitWorkerEnv
-} from "./router"
+} from "./router.js"
 
 export {
   extendStoreKitSubscriptionRenewalDate,
@@ -110,4 +119,4 @@ export {
   requestStoreKitTestNotification,
   sendStoreKitConsumptionInformation,
   type StoreKitServerApiEnv
-} from "./server-api"
+} from "./server-api.js"

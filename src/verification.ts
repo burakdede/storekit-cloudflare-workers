@@ -20,21 +20,21 @@ import {
   storeKitAppAppleId,
   storeKitAppleLookupFallbackEnabled,
   storeKitConfiguredEnvironments
-} from "./config"
-import { resolveStoreKitEntitlementCore } from "./entitlement"
+} from "./config.js"
+import { resolveStoreKitEntitlementCore } from "./entitlement.js"
 import {
   StoreKitConfigError,
   StoreKitVerificationError,
   StoreKitVerificationStageError,
   type StoreKitVerificationDiagnostics
-} from "./errors"
+} from "./errors.js"
 import {
   STOREKIT_ENVIRONMENT,
   STOREKIT_STATUS,
   type StoreKitEntitlementSnapshot,
   type StoreKitEnv,
   type StoreKitEnvironment
-} from "./types"
+} from "./types.js"
 
 export interface VerifiedStoreKitTransaction {
   environment: StoreKitEnvironment

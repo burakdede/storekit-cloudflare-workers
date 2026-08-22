@@ -1,25 +1,50 @@
 # storekit-cloudflare-workers
 
-Drop-in, server-authoritative **StoreKit 2** for **Cloudflare Workers + D1**.
+[![npm](https://img.shields.io/npm/v/storekit-cloudflare-workers)](https://www.npmjs.com/package/storekit-cloudflare-workers)
+[![CI](https://github.com/burakdede/storekit-cloudflare-workers/actions/workflows/ci.yml/badge.svg)](https://github.com/burakdede/storekit-cloudflare-workers/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/storekit-cloudflare-workers)](LICENSE)
+
+**Server-side Apple StoreKit 2 subscription validation and entitlements for Cloudflare Workers and
+D1** — in one npm package. Verifies Apple-signed JWS transactions against the App Store Server API,
+resolves subscription entitlements (trials, billing grace periods, refunds, lifetime unlocks), and
+handles App Store Server Notifications V2 idempotently. TypeScript, ESM, edge-native, no third-party
+service in your purchase path.
 
 > **Independent project.** Not affiliated with, endorsed by, or sponsored by Apple Inc. or
 > Cloudflare, Inc. "StoreKit", "App Store" and "Apple" are trademarks of Apple Inc.; "Cloudflare",
 > "Workers" and "D1" are trademarks of Cloudflare, Inc. They are used here only to describe what
 > this software interoperates with.
 
-Copy one directory, apply one schema, set four secrets, mount one handler. You get Apple JWS
+Install one package, apply one migration, set four secrets, mount one handler. You get Apple JWS
 verification, a correct entitlement engine, idempotent App Store Server Notifications V2, and the
 operational Apple calls, without writing any of it yourself.
 
-```ts
-import { createStoreKitHandler } from "./storekit"
+**Docs:** [Quick start](#setup) · [HTTP API](docs/http-api.md) · [TypeScript API](docs/api.md) ·
+[iOS client](docs/ios-client.md) · [Configuration](docs/configuration.md) ·
+[Security](docs/security.md) · [Operations](docs/operations.md) · [FAQ](docs/faq.md)
 
-const storekit = createStoreKitHandler<Env>({
+```bash
+npm install storekit-cloudflare-workers
+npx storekit-cloudflare-workers init   # migration, mount point, and the Wrangler config to paste
+```
+
+```ts
+import { createStoreKitWorker } from "storekit-cloudflare-workers"
+
+export default createStoreKitWorker<Env>({
   authenticate: async (request, env) => {
     const session = await mySessionFrom(request, env)
     return session ? { accountId: session.userId } : null
   }
 })
+```
+
+That is a complete Worker. Already have one? Mount the handler instead, and keep your router:
+
+```ts
+import { createStoreKitHandler } from "storekit-cloudflare-workers"
+
+const storekit = createStoreKitHandler<Env>({ authenticate })
 
 export default {
   async fetch(request, env, ctx) {
@@ -28,8 +53,8 @@ export default {
 }
 ```
 
-That's the whole integration. `fetch` returns `null` for non-StoreKit paths, so it composes with
-whatever router you already have.
+`fetch` returns `null` for non-StoreKit paths, so it composes with whatever router you already
+have.
 
 ---
 
@@ -193,17 +218,19 @@ sequenceDiagram
 
 ## Setup
 
-### 1. Get the code
-
-Either clone this repository as a standalone Worker, or vendor the module into an existing one:
+### 1. Install
 
 ```bash
-cp -r src/storekit /path/to/your-worker/src/
-npm install @apple/app-store-server-library
+npm install storekit-cloudflare-workers
+npx storekit-cloudflare-workers init
 ```
 
-The directory imports nothing outside itself except the Apple library; a test enforces that, so it
-stays copyable.
+`init` copies the D1 migration into `migrations/`, writes `src/storekit.ts` with the one adapter
+the package cannot supply, and prints the Wrangler block and secret commands below. It never edits
+a file that already exists, so it is safe to re-run.
+
+The package is ESM-only, ships its own types, and depends on nothing but Apple's
+`@apple/app-store-server-library`, which is why `nodejs_compat` is required below.
 
 ### 2. Configure Wrangler
 
@@ -217,7 +244,14 @@ stays copyable.
     "STOREKIT_ALLOWED_PRODUCT_IDS": "com.example.app.pro.monthly",
     "APP_STORE_APP_APPLE_ID": "1234567890"
   },
-  "d1_databases": [{ "binding": "STOREKIT_DB", "database_name": "...", "database_id": "..." }]
+  "d1_databases": [
+    {
+      "binding": "STOREKIT_DB",
+      "database_name": "storekit",
+      "database_id": "...",
+      "migrations_dir": "migrations"
+    }
+  ]
 }
 ```
 
@@ -226,8 +260,16 @@ Using a different binding name? Pass it through: `database: (env) => env.MY_DB`.
 ### 3. Create the tables
 
 ```bash
-npx wrangler d1 create storekit-cloudflare-workers   # copy the id into wrangler.jsonc
-npm run db:migrate:remote                    # or: wrangler d1 execute <DB> --file=src/storekit/schema.sql
+npx wrangler d1 create storekit          # copy the id into wrangler.jsonc
+npx wrangler d1 migrations apply STOREKIT_DB --local
+npx wrangler d1 migrations apply STOREKIT_DB --remote
+```
+
+Would rather not vendor the SQL at all? Point Wrangler at the copy inside `node_modules` and skip
+`init`'s migration step with `--no-migrations`:
+
+```jsonc
+"migrations_dir": "node_modules/storekit-cloudflare-workers/migrations"
 ```
 
 ### 4. Set the Apple secrets
@@ -245,11 +287,13 @@ Where each value comes from, and how to convert Apple's root certificates to PEM
 ### 5. Implement `authenticate`, then deploy
 
 ```bash
-npm run release:check && npm run deploy
+npx wrangler deploy
 ```
 
-Check `GET /health`: it runs `describeStoreKitConfig` and lists every configuration problem,
-reporting which secrets are present without ever revealing a value.
+Check `GET /storekit/health`, which `createStoreKitWorker` serves: it runs `describeStoreKitConfig`
+and lists every configuration problem, reporting which secrets are present without ever revealing a
+value. Mounting the handler yourself instead? Call `describeStoreKitConfig(env)` from your own
+health route.
 
 ### 6. Point Apple at the webhook
 
@@ -318,13 +362,33 @@ And `resolveStoreKitEntitlementCore` is the pure policy kernel: no Apple SDK, no
 
 ## Documentation
 
-| Document                                          | Contents                                               |
-| ------------------------------------------------- | ------------------------------------------------------ |
-| [configuration.md](docs/configuration.md)         | Every variable and secret, where to get it, trade-offs |
-| [security.md](docs/security.md)                   | Trust boundaries and the full verification chain       |
-| [operations.md](docs/operations.md)               | Webhook behaviour, outage recovery, troubleshooting    |
-| [apple-contract.md](docs/apple-contract.md)       | Apple references and how this maps to them             |
-| [release-checklist.md](docs/release-checklist.md) | Pre-deployment verification                            |
+| Document                                          | Contents                                                            |
+| ------------------------------------------------- | ------------------------------------------------------------------- |
+| [http-api.md](docs/http-api.md)                   | Every route, request and response body, error codes, field meanings |
+| [api.md](docs/api.md)                             | Every TypeScript export, option, and returned type                  |
+| [ios-client.md](docs/ios-client.md)               | Swift integration: purchase, restore, updates, gating access        |
+| [configuration.md](docs/configuration.md)         | Every variable and secret, where to get it, trade-offs              |
+| [security.md](docs/security.md)                   | Trust boundaries and the full verification chain                    |
+| [operations.md](docs/operations.md)               | Webhook behaviour, outage recovery, troubleshooting                 |
+| [faq.md](docs/faq.md)                             | Common questions, gotchas, and how this compares to hosted services |
+| [apple-contract.md](docs/apple-contract.md)       | Apple references and how this maps to them                          |
+| [release-checklist.md](docs/release-checklist.md) | Pre-release verification for this package                           |
+| [`example/`](example)                             | A deployable Worker using the package as published                  |
+
+## Common questions
+
+- **[Do I need `nodejs_compat`?](docs/faq.md#do-i-need-nodejs_compat)** Yes — Apple's library uses
+  Node built-ins.
+- **[What is the difference between `expiresAt` and `accessExpiresAt`?](docs/faq.md#what-is-the-difference-between-expiresat-and-accessexpiresat)**
+  Gate on `accessExpiresAt`; `expiresAt` is already in the past during a grace period.
+- **[Can I use it with Hono or my own router?](docs/faq.md#can-i-use-it-with-hono-itty-router-or-my-own-router)**
+  Yes, `fetch` returns `null` for paths it does not own.
+- **[How is this different from RevenueCat or Adapty?](docs/faq.md#how-is-this-different-from-revenuecat-adapty-or-glassfy)**
+  No third party in the purchase path, no revenue share, your own D1.
+- **[Why do I implement `authenticate` myself?](docs/faq.md#why-do-i-have-to-implement-authenticate-myself)**
+  A transaction proves a purchase happened, never who it belongs to.
+
+The rest are in the [FAQ](docs/faq.md).
 
 ## Scope
 
@@ -361,11 +425,24 @@ live servers. CI proves this module still agrees with the Apple SDK; it does not
 still agrees with Apple. Sandbox testing before release is not optional. The full breakdown is in
 [docs/apple-contract.md](docs/apple-contract.md#what-is-not-verified-here).
 
+## Package layout
+
+- `src/` is the package. It imports nothing but Apple's SDK: no host helpers and no ambient
+  Cloudflare globals, so it typechecks in any Worker regardless of how that Worker names its
+  bindings or generates its types. Tests enforce both boundaries.
+- `example/` is a deployable Worker that consumes the package by its published name.
+- `migrations/` is the D1 schema, shipped in the tarball so Wrangler can apply it from
+  `node_modules`.
+
+Subpath `storekit-cloudflare-workers/entitlement` is the pure policy kernel on its own, for hosts
+that want the rules without the Apple SDK or D1.
+
 ## Development
 
 ```bash
 npm install
-npm run release:check   # format, lint, typecheck, tests, and a Worker dry-run build
+npm run cf:typegen      # regenerates worker-configuration.d.ts for example/
+npm run release:check   # format, lint, typecheck, tests, build, pack, and a Worker dry-run build
 ```
 
 Tests use injectable verifier boundaries and a D1 fake; no Apple keys or production transactions are

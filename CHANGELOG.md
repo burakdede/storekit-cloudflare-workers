@@ -39,9 +39,28 @@ First release. Server-authoritative StoreKit 2 for Cloudflare Workers and D1.
 - Operational App Store Server API calls: test notifications, notification history, transaction and
   refund history, order lookup, renewal-date extension, and consumption information.
 
+### Packaging
+
+- Published to npm as `storekit-cloudflare-workers`: ESM-only, `sideEffects: false`, its own types,
+  and one runtime dependency (`@apple/app-store-server-library`), so adopting it is `npm install`
+  rather than copying a directory.
+- `createStoreKitWorker` is a whole Worker in one export, including a `GET /storekit/health`
+  configuration report. `createStoreKitHandler` is still there for mounting inside an existing
+  router.
+- `npx storekit-cloudflare-workers init` copies the D1 migration, writes a mount point with an
+  `authenticate` stub, and prints the Wrangler configuration and secret commands. It never edits an
+  existing file.
+- `migrations/` ships in the tarball, so `"migrations_dir": "node_modules/storekit-cloudflare-workers/migrations"`
+  works and the SQL need not be vendored at all.
+- Subpath `storekit-cloudflare-workers/entitlement` exposes the pure policy kernel on its own.
+
 ### Guarantees
 
-- `src/storekit/` imports nothing outside its own directory except `@apple/app-store-server-library`,
-  and a test enforces it, so the directory can be vendored into any Worker.
-- `migrations/0001_storekit.sql` and `src/storekit/schema.sql` are kept byte-identical by a test.
-- `src/auth.ts` fails closed by design.
+- The package imports nothing outside itself except `@apple/app-store-server-library`, and
+  references no ambient Cloudflare global: the D1 and `ExecutionContext` surfaces it needs are
+  declared structurally in `src/cloudflare.ts`, so it typechecks in any Worker. Tests enforce both.
+- Relative imports carry the `.js` extension the published ESM build needs, enforced by a test, and
+  a smoke job installs the packed tarball into a scratch Worker on every CI run to prove the export
+  map resolves and the result bundles for workerd.
+- The `authenticate` adapter fails closed by design, in the example Worker and in the stub `init`
+  writes.

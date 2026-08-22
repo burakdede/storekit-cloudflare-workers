@@ -7,8 +7,8 @@
  * secret when a customer's first purchase fails.
  */
 import { Buffer } from "buffer"
-import { StoreKitConfigError } from "./errors"
-import { STOREKIT_ENVIRONMENT, type StoreKitEnv, type StoreKitEnvironment } from "./types"
+import { StoreKitConfigError } from "./errors.js"
+import { STOREKIT_ENVIRONMENT, type StoreKitEnv, type StoreKitEnvironment } from "./types.js"
 
 const TRUTHY = new Set(["true", "1", "yes", "on"])
 const FALSY = new Set(["false", "0", "no", "off"])

@@ -1,48 +1,75 @@
 /**
- * Reference Worker.
+ * A complete Worker export, for hosts whose Worker is StoreKit and nothing else.
  *
- * This is a complete, deployable example of the drop-in integration: the module owns routing,
- * Apple verification, entitlement policy, D1 persistence and HTTP status mapping, so the only
- * thing left here is deciding who the caller is.
+ * `createStoreKitHandler` composes into an existing router; this wraps it so a greenfield Worker
+ * is a single default export with no routing code at all:
  *
- * To adopt the module in an existing Worker, copy the `createStoreKitHandler` call below and the
- * `authenticate` adapter in `src/auth.ts`. Nothing else in this file is required.
+ *     export default createStoreKitWorker<Env>({ authenticate })
+ *
+ * Anything the package does not route falls through to `fetch`, so it stays usable once the Worker
+ * grows its own endpoints.
  */
-import { createStoreKitHandler, describeStoreKitConfig } from "./storekit"
-import { authenticateStoreKitRequest } from "./auth"
+import type { StoreKitExecutionContext } from "./cloudflare.js"
+import { describeStoreKitConfig } from "./config.js"
+import {
+  createStoreKitHandler,
+  type StoreKitHandlerOptions,
+  type StoreKitWorkerEnv
+} from "./router.js"
 
-// Generic over the Worker's own generated `Env`, so bindings keep their real types below.
-const storekit = createStoreKitHandler<Env>({
-  authenticate: authenticateStoreKitRequest,
-  // Defaults to `env.STOREKIT_DB`; shown explicitly because renaming the binding is the most
-  // common first change an adopter makes.
-  database: (env) => env.STOREKIT_DB,
-  onEvent: (event) => console.log(JSON.stringify(event))
-})
+/* eslint-disable no-unused-vars -- Structural callback signatures name parameters only for typing. */
 
-function json(value: unknown, status = 200): Response {
+export interface StoreKitWorkerOptions<
+  TEnv extends StoreKitWorkerEnv = StoreKitWorkerEnv
+> extends StoreKitHandlerOptions<TEnv> {
+  /**
+   * Path serving a configuration report: which variables and secrets are present, never a value.
+   * Defaults to `/storekit/health`; pass `false` to not serve it.
+   */
+  healthPath?: string | false | undefined
+  /** Everything the package does not route. Returning `null` answers 404. */
+  fetch?:
+    | ((
+        _request: Request,
+        _env: TEnv,
+        _ctx: StoreKitExecutionContext
+      ) => Promise<Response | null> | Response | null)
+    | undefined
+}
+
+export interface StoreKitWorker<TEnv extends StoreKitWorkerEnv = StoreKitWorkerEnv> {
+  fetch: (_request: Request, _env: TEnv, _ctx: StoreKitExecutionContext) => Promise<Response>
+}
+
+/* eslint-enable no-unused-vars */
+
+const DEFAULT_HEALTH_PATH = "/storekit/health"
+
+function json(value: unknown, status: number): Response {
   return new Response(JSON.stringify(value), {
     status,
     headers: { "content-type": "application/json; charset=utf-8" }
   })
 }
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url)
+export function createStoreKitWorker<TEnv extends StoreKitWorkerEnv = StoreKitWorkerEnv>(
+  options: StoreKitWorkerOptions<TEnv>
+): StoreKitWorker<TEnv> {
+  const storekit = createStoreKitHandler<TEnv>(options)
+  const healthPath = options.healthPath === undefined ? DEFAULT_HEALTH_PATH : options.healthPath
 
-    // Surface a misconfigured deployment here rather than at a customer's first purchase.
-    // `describeStoreKitConfig` reports secret presence only, never a value.
-    if (request.method === "GET" && url.pathname === "/health") {
-      const report = describeStoreKitConfig(env)
-      return json({ ok: report.valid, storekit: report }, report.valid ? 200 : 503)
+  return {
+    async fetch(request, env, ctx) {
+      if (healthPath && request.method === "GET" && new URL(request.url).pathname === healthPath) {
+        const report = describeStoreKitConfig(env)
+        return json({ ok: report.valid, storekit: report }, report.valid ? 200 : 503)
+      }
+
+      const handled = await storekit.fetch(request, env, ctx)
+      if (handled) return handled
+
+      const fallback = await options.fetch?.(request, env, ctx)
+      return fallback ?? json({ code: "NOT_FOUND", message: "Not found." }, 404)
     }
-
-    const handled = await storekit.fetch(request, env, ctx)
-    if (handled) return handled
-
-    return json({ error: "not_found" }, 404)
   }
 }
-
-export { storekit }

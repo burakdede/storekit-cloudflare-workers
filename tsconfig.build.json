@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": false,
+    "paths": {},
+    // The published build must not see this repository's generated `worker-configuration.d.ts`:
+    // a library that leans on a host's ambient bindings will not typecheck in a host that names
+    // them differently. Only the platform's own runtime types are in scope here.
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["src"]
+}
