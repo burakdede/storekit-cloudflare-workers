@@ -26,6 +26,11 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: https://registry.npmjs.org
+      # Trusted publishing (OIDC) needs npm 11.5.1+, which is newer than the npm
+      # bundled with Node 22. With a trusted publisher configured on npmjs.com the
+      # publish below needs no token at all; NPM_TOKEN stays as the fallback until
+      # then, and npm removes direct token publishing in January 2027.
+      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run cf:typegen
       # The full gate: format, lint, typecheck, tests, build, pack, and a Worker dry-run build.
