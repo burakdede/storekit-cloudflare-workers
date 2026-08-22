@@ -11,7 +11,7 @@ a JWS signature; there is no bearer token. Its trust boundary is the signature p
 environment checks below.
 
 **Authentication is yours.** A StoreKit transaction proves that a purchase happened, never who it
-belongs to. `src/auth.ts` ships returning `null`, so every authenticated route answers 401 until you
+belongs to. `authenticate` ships returning `null` (see `example/src/auth.ts`, and the stub `npx storekit-cloudflare-workers init` writes), so every authenticated route answers 401 until you
 implement it. Never derive identity from a client-supplied header or body field; anyone can send
 one and claim another customer's subscription.
 

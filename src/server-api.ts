@@ -20,10 +20,10 @@ import type {
   SendTestNotificationResponse,
   TransactionHistoryRequest
 } from "@apple/app-store-server-library"
-import { storeKitConfiguredEnvironment } from "./config"
-import { StoreKitConfigError } from "./errors"
-import type { StoreKitEnv, StoreKitEnvironment } from "./types"
-import { buildStoreKitRuntimes, type StoreKitRuntime } from "./verification"
+import { storeKitConfiguredEnvironment } from "./config.js"
+import { StoreKitConfigError } from "./errors.js"
+import type { StoreKitEnv, StoreKitEnvironment } from "./types.js"
+import { buildStoreKitRuntimes, type StoreKitRuntime } from "./verification.js"
 
 export type StoreKitServerApiEnv = StoreKitEnv
 

@@ -9,10 +9,10 @@ import {
   getStoreKitEntitlement,
   processStoreKitNotification,
   syncStoreKitTransaction
-} from "../../src/storekit"
-import { StoreKitVerificationError } from "../../src/storekit"
-import type * as StoreKitModule from "../../src/storekit"
-import type * as StoreKitVerification from "../../src/storekit/verification"
+} from "storekit-cloudflare-workers"
+import { StoreKitVerificationError } from "storekit-cloudflare-workers"
+import type * as StoreKitModule from "storekit-cloudflare-workers"
+import type * as StoreKitVerification from "../../src/verification"
 
 const transaction: JWSTransactionDecodedPayload = {
   transactionId: "transaction-service-1",
@@ -69,10 +69,8 @@ const notificationRuntime = {
   allowAppleLookupFallback: true
 } as unknown as StoreKitModule.StoreKitRuntime
 
-vi.mock("../../src/storekit/verification", async () => {
-  const actual = await vi.importActual<typeof StoreKitVerification>(
-    "../../src/storekit/verification"
-  )
+vi.mock("../../src/verification", async () => {
+  const actual = await vi.importActual<typeof StoreKitVerification>("../../src/verification")
   return {
     ...actual,
     verifyStoreKitTransaction: vi.fn(async () => verifiedTransaction),

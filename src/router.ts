@@ -19,20 +19,25 @@
  *
  * `fetch` returns `null` when the request is not a StoreKit route, so it composes with any router.
  */
-import { StoreKitConfigError, StoreKitPersistenceError, StoreKitVerificationError } from "./errors"
+import type { StoreKitExecutionContext } from "./cloudflare.js"
+import {
+  StoreKitConfigError,
+  StoreKitPersistenceError,
+  StoreKitVerificationError
+} from "./errors.js"
 import {
   getStoreKitEntitlement,
   processStoreKitNotification,
   syncStoreKitTransaction,
   type StoreKitServiceConfig
-} from "./service"
+} from "./service.js"
 import {
   storeKitAllowGracePeriodAccess,
   storeKitConfiguredEnvironments,
   storeKitReconcileNotifications
-} from "./config"
-import type { StoreKitDatabase } from "./storage"
-import type { StoreKitEnv } from "./types"
+} from "./config.js"
+import type { StoreKitDatabase } from "./storage.js"
+import type { StoreKitEnv } from "./types.js"
 
 /**
  * The minimum a Worker environment must provide: the StoreKit variables.
@@ -198,7 +203,11 @@ function responseForError(error: unknown, emit: StoreKitEventSink, event: string
 /* eslint-disable no-unused-vars -- Structural fetch signature names parameters only for typing. */
 export interface StoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitWorkerEnv> {
   /** Returns `null` when the request does not match a StoreKit route. */
-  fetch: (_request: Request, _env: TEnv, _ctx?: ExecutionContext) => Promise<Response | null>
+  fetch: (
+    _request: Request,
+    _env: TEnv,
+    _ctx?: StoreKitExecutionContext
+  ) => Promise<Response | null>
   paths: StoreKitRoutePaths
 }
 

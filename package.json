@@ -1,7 +1,7 @@
 {
   "name": "storekit-cloudflare-workers",
   "version": "0.1.0",
-  "description": "Drop-in Apple StoreKit 2 subscription backend for Cloudflare Workers and D1. JWS verification, entitlements, and App Store Server Notifications V2 in one mountable handler.",
+  "description": "Server-side Apple StoreKit 2 subscription validation and entitlements for Cloudflare Workers and D1. Verifies Apple-signed JWS transactions against the App Store Server API, resolves trials, billing grace periods, refunds and lifetime unlocks, and handles App Store Server Notifications V2 idempotently.",
   "keywords": [
     "storekit",
     "storekit2",
@@ -9,13 +9,23 @@
     "app-store",
     "app-store-server-api",
     "app-store-server-notifications",
+    "notifications-v2",
+    "app-store-connect",
     "apple",
     "ios",
     "in-app-purchase",
+    "in-app-subscription",
     "iap",
+    "iap-validation",
     "subscriptions",
+    "subscription-management",
     "receipt-validation",
+    "receipt-verification",
+    "jws",
     "entitlements",
+    "grace-period",
+    "free-trial",
+    "refunds",
     "cloudflare",
     "cloudflare-workers",
     "cloudflare-d1",
@@ -23,22 +33,55 @@
     "d1",
     "serverless",
     "edge",
-    "typescript"
+    "typescript",
+    "esm"
   ],
-  "type": "module",
+  "homepage": "https://github.com/burakdede/storekit-cloudflare-workers#readme",
+  "bugs": "https://github.com/burakdede/storekit-cloudflare-workers/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/burakdede/storekit-cloudflare-workers.git"
+  },
   "license": "MIT",
-  "private": false,
+  "author": "Burak Dede",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./entitlement": {
+      "types": "./dist/entitlement.d.ts",
+      "default": "./dist/entitlement.js"
+    },
+    "./migrations/*": "./migrations/*",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "bin": {
+    "storekit-cloudflare-workers": "./bin/storekit.mjs"
+  },
   "files": [
+    "dist",
     "src",
+    "bin",
     "migrations",
     "docs",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "prepare": "husky",
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "dev": "wrangler dev -c example/wrangler.jsonc",
+    "deploy": "wrangler deploy -c example/wrangler.jsonc",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "lint": "eslint . --max-warnings=0",
@@ -46,10 +89,11 @@
     "test": "vitest run --coverage --sequence.shuffle=false",
     "test:unit": "vitest run test/unit --coverage --sequence.shuffle=false",
     "test:integration": "vitest run test/integration --coverage.enabled=false --sequence.shuffle=false",
-    "db:migrate:local": "wrangler d1 migrations apply STOREKIT_DB --local",
-    "db:migrate:remote": "wrangler d1 migrations apply STOREKIT_DB --remote",
-    "cf:typegen": "wrangler types",
-    "release:check": "npm run format:check && npm run lint && npm run typecheck && npm test && wrangler deploy --dry-run --outdir=/tmp/storekit-cloudflare-workers-dry-run"
+    "db:migrate:local": "wrangler d1 migrations apply STOREKIT_DB --local -c example/wrangler.jsonc",
+    "db:migrate:remote": "wrangler d1 migrations apply STOREKIT_DB --remote -c example/wrangler.jsonc",
+    "cf:typegen": "wrangler types -c example/wrangler.jsonc worker-configuration.d.ts",
+    "prepack": "npm run build",
+    "release:check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm pack --dry-run && wrangler deploy --dry-run -c example/wrangler.jsonc --outdir=/tmp/storekit-cloudflare-workers-dry-run"
   },
   "lint-staged": {
     "*.{ts,js,json,md,yml,yaml}": [
@@ -63,6 +107,7 @@
     "@apple/app-store-server-library": "3.1.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260822.1",
     "@eslint/js": "10.0.1",
     "@types/node": "26.2.0",
     "@typescript-eslint/eslint-plugin": "8.67.0",
@@ -78,6 +123,6 @@
     "wrangler": "4.123.0"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   }
 }

@@ -11,7 +11,7 @@ import {
   type StoreKitEntitlementSource,
   type StoreKitEntitlementStatus,
   type StoreKitEnvironment
-} from "./types"
+} from "./types.js"
 
 /**
  * The subset of Apple's `JWSTransactionDecodedPayload` the policy reads. Kept structural so the

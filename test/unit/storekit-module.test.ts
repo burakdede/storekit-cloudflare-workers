@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import * as storeKit from "../../src/storekit"
+import * as storeKit from "storekit-cloudflare-workers"
 
-const MODULE_DIR = join(__dirname, "../../src/storekit")
+const MODULE_DIR = join(__dirname, "../../src")
+const MIGRATIONS_DIR = join(__dirname, "../../migrations")
 
 function moduleSourceFiles(): string[] {
   return readdirSync(MODULE_DIR).filter((name) => name.endsWith(".ts"))
@@ -36,12 +37,16 @@ describe("public StoreKit module entrypoint", () => {
     expect(typeof storeKit.extendStoreKitSubscriptionRenewalDate).toBe("function")
   })
 
+  it("exposes the whole-Worker export", () => {
+    expect(typeof storeKit.createStoreKitWorker).toBe("function")
+  })
+
   /**
-   * The module is meant to be copied into any Worker as a directory. If a file ever reaches back
-   * into this repository's helpers, that stops being true, so the boundary is asserted, not just
-   * documented.
+   * The package must depend on nothing but the Apple SDK. If a file ever reaches into a host's
+   * helpers or into `@cloudflare/workers-types`, the published build stops working in Workers that
+   * do not have them, so the boundary is asserted, not just documented.
    */
-  it("imports nothing from outside the module except the Apple SDK", () => {
+  it("imports nothing from outside the package except the Apple SDK", () => {
     const offenders: string[] = []
 
     for (const file of moduleSourceFiles()) {
@@ -59,8 +64,24 @@ describe("public StoreKit module entrypoint", () => {
     expect(offenders).toEqual([])
   })
 
-  it("ships the D1 schema alongside the code it needs", () => {
-    const schema = readFileSync(join(MODULE_DIR, "schema.sql"), "utf8")
+  it("relative imports carry the .js extension the published ESM build needs", () => {
+    const offenders: string[] = []
+
+    for (const file of moduleSourceFiles()) {
+      for (const specifier of importSpecifiers(readFileSync(join(MODULE_DIR, file), "utf8"))) {
+        if (specifier.startsWith("./") && !specifier.endsWith(".js")) {
+          offenders.push(`${file} -> ${specifier}`)
+        }
+      }
+    }
+
+    expect(offenders).toEqual([])
+  })
+
+  it("ships the D1 schema it needs as a Wrangler migration", () => {
+    const migrations = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql"))
+    expect(migrations).toHaveLength(1)
+    const schema = readFileSync(join(MIGRATIONS_DIR, migrations[0]!), "utf8")
 
     for (const table of [
       "storekit_subscriptions",
@@ -73,23 +94,5 @@ describe("public StoreKit module entrypoint", () => {
     for (const column of ["access_expires_at", "latest_signed_date", "grace_period_expires_at"]) {
       expect(schema).toContain(column)
     }
-  })
-
-  /**
-   * The schema exists twice on purpose: `migrations/` for Wrangler's migration workflow, and
-   * `src/storekit/schema.sql` for an adopter who vendors the directory into an existing Worker.
-   * Only the headers differ; if the SQL itself drifts, one set of adopters gets a broken database.
-   */
-  it("keeps the migration and the vendored schema in sync", () => {
-    const sqlBody = (contents: string): string =>
-      contents.slice(contents.indexOf("CREATE TABLE")).trim()
-
-    const migrationsDir = join(__dirname, "../../migrations")
-    const migrations = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql"))
-    expect(migrations).toHaveLength(1)
-
-    expect(sqlBody(readFileSync(join(migrationsDir, migrations[0]!), "utf8"))).toBe(
-      sqlBody(readFileSync(join(MODULE_DIR, "schema.sql"), "utf8"))
-    )
   })
 })

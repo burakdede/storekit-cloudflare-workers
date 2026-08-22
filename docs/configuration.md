@@ -16,7 +16,7 @@ const report = describeStoreKitConfig(env)
 ```
 
 `describeStoreKitConfig` reports secret **presence** only, never a value, so its output is safe to
-log or expose on an operator dashboard. The reference Worker serves it from `GET /health`. It
+log or expose on an operator dashboard. `createStoreKitWorker` serves it from `GET /storekit/health`. It
 catches the mistakes that actually happen: a `.p8` pasted without its PEM header, a root bundle
 containing no certificate block, a non-numeric app ID, an empty product allow-list.
 

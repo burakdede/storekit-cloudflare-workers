@@ -4,8 +4,8 @@ import {
   loadStoreKitSubscriptionByInstallation,
   persistStoreKitNotification,
   persistStoreKitSubscriptionForInstallation
-} from "../../src/storekit"
-import type { StoreKitEntitlementSnapshot } from "../../src/storekit"
+} from "storekit-cloudflare-workers"
+import type { StoreKitEntitlementSnapshot } from "storekit-cloudflare-workers"
 
 const snapshot: StoreKitEntitlementSnapshot = {
   proActive: true,

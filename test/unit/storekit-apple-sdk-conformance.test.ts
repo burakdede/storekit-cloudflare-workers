@@ -36,10 +36,10 @@ import {
   resolveStoreKitEntitlementCore,
   type StoreKitEntitlementRenewalInfo,
   type StoreKitEntitlementTransaction
-} from "../../src/storekit/entitlement"
-import { verifyStoreKitTransactionWithRuntime } from "../../src/storekit/verification"
-import { STOREKIT_ENVIRONMENT, STOREKIT_STATUS } from "../../src/storekit/types"
-import type { StoreKitRuntime } from "../../src/storekit/verification"
+} from "../../src/entitlement"
+import { verifyStoreKitTransactionWithRuntime } from "../../src/verification"
+import { STOREKIT_ENVIRONMENT, STOREKIT_STATUS } from "../../src/types"
+import type { StoreKitRuntime } from "../../src/verification"
 
 const BUNDLE_ID = "com.example.app"
 const PRODUCT_ID = "com.example.pro.monthly"

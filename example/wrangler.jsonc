@@ -1,7 +1,10 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "storekit-cloudflare-workers",
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "storekit-example",
   "main": "src/worker.ts",
+  // Only this repository needs the alias: it resolves the package name to the local source so the
+  // example below is exactly the code an adopter writes after `npm install`.
+  "alias": { "storekit-cloudflare-workers": "../src/index.ts" },
   // The Apple library needs Node built-ins; without this flag the Worker will not build.
   "compatibility_date": "2026-08-03",
   "compatibility_flags": ["nodejs_compat"],
@@ -27,9 +30,9 @@
     {
       // Rename this freely; pass your binding through the handler's `database` option.
       "binding": "STOREKIT_DB",
-      "database_name": "storekit-cloudflare-workers",
+      "database_name": "storekit-example",
       "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "migrations"
+      "migrations_dir": "../migrations"
     }
   ]
 }

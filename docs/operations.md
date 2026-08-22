@@ -118,7 +118,7 @@ npx wrangler d1 execute STOREKIT_DB --remote --command="
 
 | Symptom                                                  | Likely cause                                                 |
 | -------------------------------------------------------- | ------------------------------------------------------------ |
-| 503 `StoreKit verification is not configured.`           | A secret is missing. Check `GET /health`.                    |
+| 503 `StoreKit verification is not configured.`           | A secret is missing. Check `GET /storekit/health`.           |
 | Every transaction rejected, stage `submitted_jws_decode` | Wrong or empty `APPLE_ROOT_CERTIFICATES_PEM`.                |
 | Rejected with stage `submitted_jws_claims`               | Bundle ID, environment, or product not on the allow-list.    |
 | Production notifications fail, sandbox works             | `APP_STORE_APP_APPLE_ID` missing or wrong.                   |

@@ -8,7 +8,7 @@ import {
   verifyStoreKitNotificationWithRuntime,
   verifyStoreKitTransactionWithRuntime,
   type StoreKitRuntime
-} from "../../src/storekit"
+} from "storekit-cloudflare-workers"
 
 const baseTransaction: JWSTransactionDecodedPayload = {
   transactionId: "transaction-1",

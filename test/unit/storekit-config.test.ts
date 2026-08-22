@@ -11,7 +11,7 @@ import {
   StoreKitConfigError,
   StoreKitVerificationError,
   type StoreKitEnv
-} from "../../src/storekit"
+} from "storekit-cloudflare-workers"
 
 const PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nMEECAQ==\n-----END PRIVATE KEY-----"
 const ROOT_CERT = "-----BEGIN CERTIFICATE-----\nAQIDBA==\n-----END CERTIFICATE-----"

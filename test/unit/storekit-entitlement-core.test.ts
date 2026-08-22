@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   resolveStoreKitEntitlementCore,
   type StoreKitEntitlementInput
-} from "../../src/storekit/entitlement"
+} from "../../src/entitlement"
 
 const now = new Date("2026-05-26T12:00:00.000Z")
 const future = Date.parse("2099-06-02T12:00:00.000Z")

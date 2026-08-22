@@ -5,7 +5,10 @@ import {
   type JWSTransactionDecodedPayload
 } from "@apple/app-store-server-library"
 import { describe, expect, it } from "vitest"
-import { resolveStoreKitEntitlement, type VerifiedStoreKitTransaction } from "../../src/storekit"
+import {
+  resolveStoreKitEntitlement,
+  type VerifiedStoreKitTransaction
+} from "storekit-cloudflare-workers"
 
 const now = new Date("2026-05-26T12:00:00.000Z")
 const future = Date.parse("2099-06-02T12:00:00.000Z")

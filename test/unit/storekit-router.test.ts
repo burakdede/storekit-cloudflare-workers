@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { MockD1Database } from "../helpers/mock-d1"
-import { createStoreKitHandler } from "../../src/storekit/router"
-import { StoreKitPersistenceError, StoreKitVerificationError } from "../../src/storekit/errors"
-import type * as StoreKitService from "../../src/storekit/service"
+import { createStoreKitHandler } from "../../src/router"
+import { StoreKitPersistenceError, StoreKitVerificationError } from "../../src/errors"
+import type * as StoreKitService from "../../src/service"
 
 const snapshot = {
   proActive: true,
@@ -16,7 +16,7 @@ const snapshot = {
 const syncStoreKitTransaction = vi.fn()
 const processStoreKitNotification = vi.fn()
 
-vi.mock("../../src/storekit/service", async (importOriginal) => {
+vi.mock("../../src/service", async (importOriginal) => {
   const actual = await importOriginal<typeof StoreKitService>()
   return {
     ...actual,
