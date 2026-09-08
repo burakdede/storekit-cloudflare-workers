@@ -40,8 +40,20 @@ func syncWithServer(
     request.httpBody = try JSONEncoder().encode(body)
 
     let (data, response) = try await URLSession.shared.data(for: request)
-    guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw SyncError.rejected }
-    entitlement = try JSONDecoder().decode(Entitlement.self, from: data)
+    switch (response as? HTTPURLResponse)?.statusCode {
+    case 200:
+        entitlement = try JSONDecoder().decode(Entitlement.self, from: data)
+    case 409:
+        // This purchase is already bound to a different account. Retrying will never succeed —
+        // show a support path instead of a spinner. See "When the server answers 409" below.
+        throw SyncError.ownedByAnotherAccount
+    case 503:
+        // Apple or the backend is briefly unavailable. Safe to retry with backoff; do not finish
+        // the transaction, so StoreKit replays it.
+        throw SyncError.temporarilyUnavailable
+    default:
+        throw SyncError.rejected
+    }
 }
 ```
 
@@ -74,6 +86,28 @@ func restore() async throws {
 }
 ```
 
+## When the server answers 409
+
+The first account to sync a transaction owns it. A sync from any other account is refused, so a
+signed transaction that leaks cannot take a paying customer's access away.
+
+The client consequence: **`409` is terminal, not transient.** Retrying it, or looping on it at every
+launch, will never succeed.
+
+```swift
+catch SyncError.ownedByAnotherAccount {
+    // Do not finish the transaction and do not retry on a timer.
+    show("This purchase is already in use on another account.", action: .contactSupport)
+}
+```
+
+It is most likely when someone signed into your app with a new account while keeping the same Apple
+Account. Moving the purchase is a deliberate support action on the server side; see
+[configuration.md](configuration.md#storekit_allow_account_transfer).
+
+Passing `appAccountToken` at purchase, as the snippet above does, is what prevents this from
+happening by accident in the first place.
+
 ## Read the entitlement
 
 ```swift
@@ -82,15 +116,42 @@ struct Entitlement: Decodable {
     let productId: String?
     let accessExpiresAt: Date?      // gate on this
     let expiresAt: Date?            // do NOT gate on this
+    let renewalDate: Date?          // show this
     let isTrial: Bool
     let status: String
     let autoRenewStatus: Int?
     let autoRenewProductId: String?
+    let inAppOwnershipType: String? // "PURCHASED" or "FAMILY_SHARED"
+    let entitlements: [Entry]
+
+    struct Entry: Decodable {
+        let proActive: Bool
+        let productId: String?
+        let subscriptionGroupIdentifier: String?
+        let accessExpiresAt: Date?
+        let perpetual: Bool
+        let status: String
+    }
 }
 
 let entitlement: Entitlement = try await api.get("/storekit/entitlement")
 if entitlement.proActive { unlockPro() }
 ```
+
+**Selling one thing?** The top-level fields are all you need, and nothing above is required reading.
+
+**Selling more than one?** Use `entitlements`, which carries one entry per subscription group. A
+lifetime unlock has no group and appears as its own entry with `perpetual: true`. Gating a second
+product on the top-level `productId` lets whichever entitlement ranks highest decide both:
+
+```swift
+let owns = Set(entitlement.entitlements.filter(\.proActive).compactMap(\.productId))
+if owns.contains("com.example.pro.monthly") { unlockPro() }
+if owns.contains("com.example.extra.storage") { unlockStorage() }
+```
+
+**Show `renewalDate`, not `expiresAt`.** During a billing grace period `expiresAt` is already in the
+past — which is exactly when a customer opens the subscription screen to find out why.
 
 `proActive` is the answer. It already accounts for billing grace periods, perpetual non-consumables,
 refunds, and revocations, and it is re-evaluated at read time so a lapse needs no cron job.
@@ -101,19 +162,28 @@ own `expiresAt` is already in the past while Apple keeps serving the customer. A
 
 ## Handling each status in the UI
 
-| `status`        | What the customer sees                                                           |
-| --------------- | -------------------------------------------------------------------------------- |
-| `active_paid`   | Full access.                                                                     |
-| `active_trial`  | Full access, plus days remaining and what happens when the trial ends.           |
-| `grace_period`  | Full access **and** a "update your payment method" prompt. Do not lock them out. |
-| `billing_retry` | Locked, with a payment-update prompt — this is recoverable, not churn.           |
-| `expired`       | Locked, with a resubscribe offer.                                                |
-| `refunded`      | Locked. Terminal; do not offer a "restore" that appears to bring it back.        |
-| `revoked`       | Locked (family sharing removed, or entitlement revoked).                         |
-| `free`          | Never purchased.                                                                 |
+| `status`         | What the customer sees                                                           |
+| ---------------- | -------------------------------------------------------------------------------- |
+| `active_paid`    | Full access.                                                                     |
+| `active_trial`   | Full access, plus days remaining and what happens when the trial ends.           |
+| `grace_period`   | Full access **and** a "update your payment method" prompt. Do not lock them out. |
+| `billing_retry`  | Locked, with a payment-update prompt — this is recoverable, not churn.           |
+| `expired`        | Locked, with a resubscribe offer.                                                |
+| `refunded`       | Locked. Terminal; do not offer a "restore" that appears to bring it back.        |
+| `family_revoked` | Locked. The family organiser stopped sharing — offer their own subscription.     |
+| `revoked`        | Locked. Apple reported a revocation with nothing to attribute it to.             |
+| `upgraded`       | Transitional. This transaction was replaced; re-sync to pick up the new one.     |
+| `family_shared`  | Locked, and only if you exclude shared purchases. Say why, or it reads as a bug. |
+| `free`           | Never purchased.                                                                 |
+| `unknown`        | Apple sent a status this version does not map. Treat as locked, and log it.      |
 
 `autoRenewStatus == 0` means the customer has turned renewal off but still has access until
-`accessExpiresAt` — that is the moment to run a win-back offer, not a lockout.
+`accessExpiresAt` — that is the moment to run a win-back offer, not a lockout. The server reports
+`eligibleWinBackOfferIds` when Apple says the customer qualifies for one.
+
+`inAppOwnershipType == "FAMILY_SHARED"` means a family organiser is paying. Worth saying so in an
+account screen: a customer who cannot find their own subscription to manage will otherwise open a
+support ticket.
 
 ## Offline and failure behaviour
 

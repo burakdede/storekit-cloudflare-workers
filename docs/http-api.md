@@ -303,6 +303,7 @@ Structured events carry no secrets, no signed payloads, and no bearer tokens. Se
 | `revoked`        | no     | Apple reported status 5 with nothing to attribute it to.                                |
 | `refunded`       | no     | Refunded, fully or prorated. Terminal, and it can arrive after a newer renewal.         |
 | `family_revoked` | no     | Family Sharing ended. Nobody was refunded.                                              |
+| `upgraded`       | no     | Superseded by an upgrade; the replacement transaction holds the entitlement.            |
 | `family_shared`  | no³    | A Family Sharing purchase your policy excludes.                                         |
 | `free`           | no     | No purchase on record.                                                                  |
 | `unknown`        | no     | Apple returned a status this version does not map.                                      |
