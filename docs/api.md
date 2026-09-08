@@ -56,16 +56,18 @@ export default {
 }
 ```
 
-| Option                            | Type                                               | Default                                             | Notes                                                                   |
-| --------------------------------- | -------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
-| `authenticate`                    | `(request, env) => StoreKitRequestContext \| null` | **required**                                        | Return `null` to answer `401`. Never called for the Apple webhook.      |
-| `database`                        | `(env) => D1Database \| undefined`                 | `env.STOREKIT_DB`                                   | Point at any binding name.                                              |
-| `paths`                           | `Partial<StoreKitRoutePaths>`                      | `/storekit/*`                                       | e.g. `{ sync: "/api/v1/iap/sync" }`.                                    |
-| `allowGracePeriodAccess`          | `boolean`                                          | `STOREKIT_ALLOW_GRACE_PERIOD_ACCESS`, itself `true` | Code wins over the variable.                                            |
-| `reconcileNotificationsWithApple` | `boolean`                                          | `STOREKIT_RECONCILE_NOTIFICATIONS`, itself `true`   | Re-read Apple's status per notification.                                |
-| `allowAccountTransfer`            | `boolean`                                          | `STOREKIT_ALLOW_ACCOUNT_TRANSFER`, itself `false`   | Let a sync take an entitlement off the account that owns it.            |
-| `allowFamilySharing`              | `boolean`                                          | `STOREKIT_ALLOW_FAMILY_SHARING`, itself `true`      | Whether a `FAMILY_SHARED` purchase grants access.                       |
-| `onEvent`                         | `(event: Record<string, unknown>) => void`         | —                                                   | Structured logs. No secrets, payloads, or tokens are ever passed to it. |
+| Option                            | Type                                                           | Default                                             | Notes                                                                   |
+| --------------------------------- | -------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
+| `authenticate`                    | `(request, env) => StoreKitRequestContext \| null`             | **required**                                        | Return `null` to answer `401`. Never called for the Apple webhook.      |
+| `database`                        | `(env) => D1Database \| undefined`                             | `env.STOREKIT_DB`                                   | Point at any binding name.                                              |
+| `paths`                           | `Partial<StoreKitRoutePaths>`                                  | `/storekit/*`                                       | e.g. `{ sync: "/api/v1/iap/sync" }`.                                    |
+| `allowGracePeriodAccess`          | `boolean`                                                      | `STOREKIT_ALLOW_GRACE_PERIOD_ACCESS`, itself `true` | Code wins over the variable.                                            |
+| `reconcileNotificationsWithApple` | `boolean`                                                      | `STOREKIT_RECONCILE_NOTIFICATIONS`, itself `true`   | Re-read Apple's status per notification.                                |
+| `allowAccountTransfer`            | `boolean`                                                      | `STOREKIT_ALLOW_ACCOUNT_TRANSFER`, itself `false`   | Let a sync take an entitlement off the account that owns it.            |
+| `allowFamilySharing`              | `boolean`                                                      | `STOREKIT_ALLOW_FAMILY_SHARING`, itself `true`      | Whether a `FAMILY_SHARED` purchase grants access.                       |
+| `onEntitlementChange`             | `(change: StoreKitEntitlementChange) => void \| Promise<void>` | —                                                   | Fires when a write actually changed the entitlement. See below.         |
+| `entitlementChangeMode`           | `"await" \| "waitUntil"`                                       | `"await"`                                           | `waitUntil` responds without waiting for the hook.                      |
+| `onEvent`                         | `(event: Record<string, unknown>) => void`                     | —                                                   | Structured logs. No secrets, payloads, or tokens are ever passed to it. |
 
 Returns `{ fetch, paths }`.
 
@@ -120,6 +122,52 @@ const { snapshot } = await syncStoreKitTransaction(
 | `allowFamilySharing`              | `boolean?`    | Defaults to the Worker variable, itself on.    |
 | `sandboxAllowed`                  | `boolean?`    | Narrow the allowed environments for this call. |
 | `now`                             | `Date?`       | Inject the clock, for tests.                   |
+
+### `onEntitlementChange`
+
+Storing the entitlement is half an integration; the other half is your application reacting to it.
+This is where you mirror the tier onto your own `users` table, send the payment-failure push that
+saves a subscription, or release server-side resources on a refund.
+
+```ts
+createStoreKitHandler<Env>({
+  authenticate,
+  onEntitlementChange: async ({ accountId, previous, next, changed, source, notification }) => {
+    if (!accountId) return
+    await env.DB.prepare("UPDATE users SET tier = ? WHERE id = ?")
+      .bind(next.proActive ? "pro" : "free", accountId)
+      .run()
+
+    if (changed.includes("status") && next.status === "grace_period") {
+      await sendPaymentUpdatePush(accountId)
+    }
+  }
+})
+```
+
+| Field          | Type                                 | Notes                                                         |
+| -------------- | ------------------------------------ | ------------------------------------------------------------- |
+| `accountId`    | `string \| null`                     | The account the entitlement is bound to, from the stored row. |
+| `previous`     | `StoreKitSubscriptionRecord \| null` | The projection before this write. `null` on a first purchase. |
+| `next`         | `StoreKitEntitlementSnapshot`        | What was just persisted.                                      |
+| `changed`      | `StoreKitEntitlementChangeField[]`   | Which significant fields differ. Never empty.                 |
+| `source`       | `"sync" \| "notification"`           | Which path wrote it.                                          |
+| `notification` | `{ uuid, type, subtype }?`           | Present when `source` is `"notification"`.                    |
+
+**It fires only on a real change.** `changed` is computed over `proActive`, `status`, `productId`,
+`accessExpiresAt`, `autoRenewStatus`, `autoRenewProductId` and `revocationType`. Timestamps that move
+on every write are excluded deliberately, so a client re-syncing at every launch does not look like a
+subscription event, and a replayed notification fires nothing.
+
+**A throwing hook never fails the request.** The write has already committed. Failing the response
+would make Apple redeliver a notification that was in fact processed, or turn a successful purchase
+into a server error. Errors go to `onEvent` as `storekit_entitlement_change_hook_failed`.
+
+**Cost.** The hook needs the previous state, which is one extra indexed row read per write. It is
+only issued when a hook is configured.
+
+Pass `entitlementChangeMode: "waitUntil"` to respond without waiting for the hook. It needs the `ctx`
+your Worker was called with, and falls back to awaiting when none was passed.
 
 ---
 

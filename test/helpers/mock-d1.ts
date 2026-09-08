@@ -213,7 +213,11 @@ export class MockD1Database {
   private readonly routeLeases = new Map<string, RouteLeaseRow>()
   private readonly routePopularityRows = new Map<string, RoutePopularityRow>()
 
+  /** Every statement prepared, in order, so a test can assert which reads a code path costs. */
+  readonly preparedSql: string[] = []
+
   prepare(sql: string): MockPreparedStatement {
+    this.preparedSql.push(sql)
     return new MockPreparedStatement(this, sql)
   }
 
@@ -519,7 +523,14 @@ export class MockD1Database {
       const row = this.storeKitSubscriptions.get(
         this.storeKitSubscriptionKey(String(bindings[0]), String(bindings[1]))
       )
-      return (row ? { installationId: row.installation_id } : null) as T | null
+      if (!row) return null
+      // Two reads share this WHERE clause: the ownership check, which selects installation_id
+      // alone, and the full projection read behind the entitlement change hook.
+      return (
+        sql.includes("latest_transaction_id AS latestTransactionId")
+          ? this.storeKitSubscriptionResult(row)
+          : { installationId: row.installation_id }
+      ) as T | null
     }
     if (sql.includes("FROM storekit_subscriptions")) {
       const row = sql.includes("WHERE installation_id = ?")
