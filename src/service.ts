@@ -14,6 +14,7 @@ import {
   verifyStoreKitNotificationForRuntime,
   verifyStoreKitTransaction,
   type StoreKitRuntime,
+  type StoreKitRuntimeSource,
   type VerifiedStoreKitNotification,
   type VerifiedStoreKitTransaction
 } from "./verification.js"
@@ -51,6 +52,11 @@ export interface StoreKitServiceConfig {
    */
   allowAccountTransfer?: boolean | undefined
   /** Called after a write that changed the entitlement. See `StoreKitEntitlementChangeHook`. */
+  /**
+   * Prebuilt Apple runtimes, so an isolate builds the verifier and client once instead of per
+   * request. Defaults to building them from `apple`.
+   */
+  runtimes?: StoreKitRuntimeSource | undefined
   onEntitlementChange?: StoreKitEntitlementChangeHook | undefined
   /** Reports a hook that threw. The write already succeeded, so this never fails the request. */
   onEntitlementChangeError?: ((_error: unknown) => void) | undefined
@@ -282,7 +288,11 @@ export async function syncStoreKitTransaction(
     )
   }
 
-  const verified = await verifyStoreKitTransaction(input.signedTransactionJWS, config.apple)
+  const verified = await verifyStoreKitTransaction(
+    input.signedTransactionJWS,
+    config.apple,
+    config.runtimes
+  )
   if (input.appBundleId !== config.apple.STOREKIT_BUNDLE_ID) {
     throw new StoreKitVerificationError(
       "StoreKit app bundle does not match the configured bundle.",
@@ -413,7 +423,8 @@ export async function processStoreKitNotification(
 ): Promise<StoreKitNotificationProcessResult> {
   const { verified, runtime } = await verifyStoreKitNotificationForRuntime(
     signedPayload,
-    config.apple
+    config.apple,
+    config.runtimes
   )
   if (verified.environment === "Sandbox" && config.sandboxAllowed === false) {
     throw new StoreKitVerificationError(

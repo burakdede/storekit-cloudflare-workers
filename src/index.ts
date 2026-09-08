@@ -68,6 +68,7 @@ export {
   verifyStoreKitTransaction,
   verifyStoreKitTransactionWithRuntime,
   type StoreKitRuntime,
+  type StoreKitRuntimeSource,
   type StoreKitSubscriptionState,
   type VerifiedStoreKitNotification,
   type VerifiedStoreKitSubscriptionTransaction,

@@ -570,11 +570,32 @@ async function verifyAcrossStoreKitRuntimes<T>(
   throw lastError ?? new StoreKitVerificationError()
 }
 
+/**
+ * Prebuilt runtimes, or `undefined` to build them from `env`.
+ *
+ * Constructing a runtime parses the root certificate bundle and builds an Apple client, which a
+ * Worker isolate can do once and keep rather than repeating per request. Accepting them here is
+ * also the seam that lets the composed stack be tested against a controlled Apple.
+ */
+export type StoreKitRuntimeSource =
+  | StoreKitRuntime[]
+  // eslint-disable-next-line no-unused-vars -- Structural signature names its parameter for typing.
+  | (() => StoreKitRuntime[] | Promise<StoreKitRuntime[]>)
+
+async function resolveStoreKitRuntimes(
+  env: StoreKitEnv,
+  source: StoreKitRuntimeSource | undefined
+): Promise<StoreKitRuntime[]> {
+  if (!source) return buildStoreKitRuntimes(env)
+  return typeof source === "function" ? source() : source
+}
+
 export async function verifyStoreKitTransaction(
   signedTransactionJWS: string,
-  env: StoreKitEnv
+  env: StoreKitEnv,
+  runtimeSource?: StoreKitRuntimeSource
 ): Promise<VerifiedStoreKitTransaction> {
-  const runtimes = await buildStoreKitRuntimes(env)
+  const runtimes = await resolveStoreKitRuntimes(env, runtimeSource)
   const { value } = await verifyAcrossStoreKitRuntimes(runtimes, (runtime) =>
     verifyStoreKitTransactionWithRuntime(signedTransactionJWS, runtime)
   )
@@ -683,12 +704,13 @@ export async function verifyStoreKitNotificationWithRuntime(
  */
 export async function verifyStoreKitNotificationForRuntime(
   signedPayload: string,
-  env: StoreKitEnv
+  env: StoreKitEnv,
+  runtimeSource?: StoreKitRuntimeSource
 ): Promise<{
   verified: VerifiedStoreKitNotification
   runtime: StoreKitRuntime
 }> {
-  const runtimes = await buildStoreKitRuntimes(env)
+  const runtimes = await resolveStoreKitRuntimes(env, runtimeSource)
   const { value, runtime } = await verifyAcrossStoreKitRuntimes(runtimes, (candidate) =>
     verifyStoreKitNotificationWithRuntime(signedPayload, candidate)
   )
@@ -697,9 +719,10 @@ export async function verifyStoreKitNotificationForRuntime(
 
 export async function verifyStoreKitNotification(
   signedPayload: string,
-  env: StoreKitEnv
+  env: StoreKitEnv,
+  runtimeSource?: StoreKitRuntimeSource
 ): Promise<VerifiedStoreKitNotification> {
-  const { verified } = await verifyStoreKitNotificationForRuntime(signedPayload, env)
+  const { verified } = await verifyStoreKitNotificationForRuntime(signedPayload, env, runtimeSource)
   return verified
 }
 
