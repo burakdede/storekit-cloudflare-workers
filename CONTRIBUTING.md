@@ -56,6 +56,24 @@ silently costs someone revenue or leaks access:
 - Notification processing, replay, and the reconciliation path.
 - Anything that decides what reaches a log or an HTTP response body.
 
+## The two test layers
+
+`test/unit/` runs against `MockD1Database`, which re-implements the adapter's SQL in JavaScript by
+matching on statement text. That is fast and precise for policy, and it is where most tests belong.
+It cannot, by construction, tell you whether the SQL is valid.
+
+`test/integration/` runs the real statements against real SQLite (`node:sqlite`, no dependency) over
+the real migrations. It is where the schema and the adapter are checked against each other:
+
+- A column the adapter binds that no migration adds.
+- An `ON CONFLICT` clause SQLite reads differently from the way the adapter assumes.
+- An `ORDER BY` that does not order the way the module claims.
+
+**If you change SQL or a migration, add an integration test.** Line coverage will not move — both
+layers exercise the same lines — so the unit suite staying green is not evidence the statement works.
+Removing one column from a migration currently fails eleven integration tests and zero unit tests,
+which is the difference the layer exists for.
+
 ## How we stay correct against Apple's SDK
 
 `test/unit/storekit-apple-sdk-conformance.test.ts` is the guard, because every other test stubs the

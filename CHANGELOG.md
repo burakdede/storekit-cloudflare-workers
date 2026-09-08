@@ -102,6 +102,20 @@ new cases, or a default.
   `appleLookupFailed` (which call failed, since the blast radius differs) and Apple's HTTP status,
   which separates a rate limit from a bad credential from an Apple incident.
 
+### Testing
+
+- **The adapter's SQL now runs against a real database.** Every test went through
+  `MockD1Database`, which re-implements the statements in JavaScript by matching on their text, so
+  nothing had ever parsed or executed the SQL itself — a column the schema lacked, or an
+  `ON CONFLICT` clause SQLite reads differently, would have passed.
+- `test/integration/` executes the real statements against real SQLite (`node:sqlite`, no new
+  dependency) over the real migrations, covering the account binding rule, the out-of-order write
+  guard, the revocation bypass, per-group reads, ranking, environment isolation, and the notification
+  ledger's idempotency. The `test:integration` script previously pointed at a directory that did not
+  exist.
+- Line coverage is unchanged, because both layers exercise the same lines. The difference is
+  semantic: deleting one column from a migration fails eleven integration tests and no unit tests.
+
 ### Tooling
 
 - **`init` no longer tells an existing project to replace its Worker.** It generated a
