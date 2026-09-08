@@ -28,6 +28,7 @@ import {
 } from "./errors.js"
 import {
   getStoreKitEntitlement,
+  listStoreKitEntitlements,
   processStoreKitNotification,
   syncStoreKitTransaction,
   type StoreKitEntitlementChange,
@@ -363,12 +364,16 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
   }
 
   async function handleEntitlement(env: TEnv, context: StoreKitRequestContext): Promise<Response> {
-    const entitlement = await getStoreKitEntitlement(
-      context.accountId,
-      storeKitConfiguredEnvironments(env),
-      { d1: resolveDatabase(env) as StoreKitDatabase }
-    )
-    return jsonResponse(entitlement, 200)
+    const environments = storeKitConfiguredEnvironments(env)
+    const database = { d1: resolveDatabase(env) as StoreKitDatabase }
+    const resolvedAt = new Date()
+    // The top-level fields describe the single best entitlement, which is what a one-product app
+    // reads; `entitlements` lists every group the account holds. Both come from one row read.
+    const [entitlement, entitlements] = await Promise.all([
+      getStoreKitEntitlement(context.accountId, environments, database, resolvedAt),
+      listStoreKitEntitlements(context.accountId, environments, database, resolvedAt)
+    ])
+    return jsonResponse({ ...entitlement, entitlements }, 200)
   }
 
   /**

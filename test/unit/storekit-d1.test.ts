@@ -118,6 +118,24 @@ describe("StoreKit D1 adapter", () => {
     ).toMatchObject({ isUpgraded: 1 })
   })
 
+  it("round-trips the subscription group through both projections", async () => {
+    const db = new MockD1Database()
+
+    await persistStoreKitSubscriptionForInstallation(
+      entitlementSnapshot({ subscriptionGroupIdentifier: "group-pro" }),
+      "installation-1",
+      "com.example.app",
+      env(db)
+    )
+
+    expect(db.getStoreKitSubscriptionRows()[0]).toMatchObject({
+      subscription_group_identifier: "group-pro"
+    })
+    expect(db.getStoreKitTransactionRows()[0]).toMatchObject({
+      subscription_group_identifier: "group-pro"
+    })
+  })
+
   it("records transaction-less notifications without creating entitlement state", async () => {
     const db = new MockD1Database()
 

@@ -115,6 +115,13 @@ export interface StoreKitEntitlementSnapshot {
    */
   inAppOwnershipType: string | null
   /**
+   * The subscription group this product belongs to, or `null` for a non-subscription purchase.
+   *
+   * Apple allows at most one active subscription per group, so a group is the unit an entitlement
+   * is resolved within. Separate groups are concurrent entitlements, not competing ones.
+   */
+  subscriptionGroupIdentifier: string | null
+  /**
    * True when Apple cancelled this subscription to move the customer to another one.
    *
    * A superseded transaction never grants access: its replacement does. Kept on the snapshot and

@@ -73,6 +73,7 @@ export {
 } from "./verification.js"
 
 export {
+  listStoreKitSubscriptionsByInstallation,
   loadStoreKitSubscriptionByInstallation,
   loadStoreKitSubscriptionByTransaction,
   loadStoreKitSubscriptionOwner,
@@ -88,6 +89,7 @@ export {
 export {
   getStoreKitEntitlement,
   isStoreKitRecordActive,
+  listStoreKitEntitlements,
   processStoreKitNotification,
   readStoreKitEntitlement,
   syncStoreKitTransaction,
@@ -95,6 +97,7 @@ export {
   type StoreKitEntitlementChange,
   type StoreKitEntitlementChangeField,
   type StoreKitEntitlementChangeHook,
+  type StoreKitEntitlementEntry,
   type StoreKitNotificationProcessResult,
   type StoreKitServiceConfig,
   type StoreKitTransactionSyncInput,

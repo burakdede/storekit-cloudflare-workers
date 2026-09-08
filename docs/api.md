@@ -102,13 +102,14 @@ const { snapshot } = await syncStoreKitTransaction(
 )
 ```
 
-| Function                                                   | Returns                                                   | Purpose                                                                     |
-| ---------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `syncStoreKitTransaction(input, config)`                   | `{ snapshot, verified }`                                  | Verify a signed transaction, reconcile with Apple, persist, and project.    |
-| `processStoreKitNotification(signedPayload, config)`       | `{ processed, replayed, snapshot, reconciled, verified }` | The webhook path, including the replay ledger.                              |
-| `getStoreKitEntitlement(accountId, environments, config)`  | `StoreKitCurrentEntitlement`                              | Read the projection, re-evaluating expiry now. Never throws on "no record". |
-| `readStoreKitEntitlement(accountId, environments, config)` | `StoreKitSubscriptionRecord \| null`                      | The raw stored row.                                                         |
-| `isStoreKitRecordActive(record, now)`                      | `boolean`                                                 | The access rule on its own, for your own queries.                           |
+| Function                                                    | Returns                                                   | Purpose                                                                             |
+| ----------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `syncStoreKitTransaction(input, config)`                    | `{ snapshot, verified }`                                  | Verify a signed transaction, reconcile with Apple, persist, and project.            |
+| `processStoreKitNotification(signedPayload, config)`        | `{ processed, replayed, snapshot, reconciled, verified }` | The webhook path, including the replay ledger.                                      |
+| `getStoreKitEntitlement(accountId, environments, config)`   | `StoreKitCurrentEntitlement`                              | The single best entitlement, re-evaluating expiry now. Never throws on "no record". |
+| `listStoreKitEntitlements(accountId, environments, config)` | `StoreKitEntitlementEntry[]`                              | Every entitlement the account holds, one per subscription group.                    |
+| `readStoreKitEntitlement(accountId, environments, config)`  | `StoreKitSubscriptionRecord \| null`                      | The raw stored row.                                                                 |
+| `isStoreKitRecordActive(record, now)`                       | `boolean`                                                 | The access rule on its own, for your own queries.                                   |
 
 ### `StoreKitServiceConfig`
 

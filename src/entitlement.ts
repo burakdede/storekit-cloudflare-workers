@@ -40,6 +40,8 @@ export interface StoreKitEntitlementTransaction {
   isUpgraded?: boolean | undefined
   /** `PURCHASED` or `FAMILY_SHARED`. Absent on transactions signed before Apple added it. */
   inAppOwnershipType?: string | undefined
+  /** The group the subscription belongs to. Absent for non-subscription products. */
+  subscriptionGroupIdentifier?: string | undefined
 }
 
 /**
@@ -294,6 +296,7 @@ function baseSnapshot(
     revocationPercentage: transaction.revocationPercentage ?? null,
     appAccountToken: transaction.appAccountToken ?? null,
     inAppOwnershipType: transaction.inAppOwnershipType ?? null,
+    subscriptionGroupIdentifier: transaction.subscriptionGroupIdentifier ?? null,
     isUpgraded: transaction.isUpgraded ?? false,
     productType: transaction.type ?? null,
     offerDiscountType: transaction.offerDiscountType ?? null,

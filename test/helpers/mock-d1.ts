@@ -67,6 +67,7 @@ type StoreKitSubscriptionRow = {
   installation_id: string | null
   app_account_token: string | null
   in_app_ownership_type: string | null
+  subscription_group_identifier: string | null
   latest_transaction_id: string
   app_bundle_id: string
   product_id: string
@@ -115,6 +116,7 @@ type StoreKitTransactionRow = {
   installation_id: string | null
   app_account_token: string | null
   in_app_ownership_type: string | null
+  subscription_group_identifier: string | null
   app_bundle_id: string
   product_id: string
   purchase_date: string | null
@@ -245,6 +247,7 @@ export class MockD1Database {
     row: Omit<
       StoreKitSubscriptionRow,
       | "in_app_ownership_type"
+      | "subscription_group_identifier"
       | "access_expires_at"
       | "perpetual"
       | "grace_period_expires_at"
@@ -267,6 +270,7 @@ export class MockD1Database {
   ): void {
     const seeded: StoreKitSubscriptionRow = {
       in_app_ownership_type: null,
+      subscription_group_identifier: null,
       access_expires_at: row.expires_at,
       perpetual: 0,
       grace_period_expires_at: null,
@@ -424,31 +428,47 @@ export class MockD1Database {
     return Boolean(row.access_expires_at && row.access_expires_at > resolvedAt)
   }
 
+  /**
+   * Best-entitlement-first, mirroring SUBSCRIPTION_RANKING in the adapter. Both readers share it
+   * there, so both share it here.
+   */
+  private selectStoreKitSubscriptionsByInstallation(
+    installationId: string,
+    readableEnvironments: string[],
+    resolvedAt: string
+  ): StoreKitSubscriptionRow[] {
+    return Array.from(this.storeKitSubscriptions.values())
+      .filter(
+        (candidate) =>
+          candidate.installation_id === installationId &&
+          readableEnvironments.includes(candidate.environment)
+      )
+      .sort((left, right) => {
+        const leftRank = this.storeKitRowActive(left, resolvedAt) ? 0 : 1
+        const rightRank = this.storeKitRowActive(right, resolvedAt) ? 0 : 1
+        return (
+          leftRank - rightRank ||
+          (left.environment === "Production" ? 0 : 1) -
+            (right.environment === "Production" ? 0 : 1) ||
+          right.perpetual - left.perpetual ||
+          (right.access_expires_at ?? "").localeCompare(left.access_expires_at ?? "") ||
+          right.last_verified_at.localeCompare(left.last_verified_at) ||
+          right.latest_transaction_id.localeCompare(left.latest_transaction_id)
+        )
+      })
+  }
+
   private selectStoreKitSubscriptionByInstallation(
     installationId: string,
     readableEnvironments: string[],
     resolvedAt: string
   ): StoreKitSubscriptionRow | null {
     return (
-      Array.from(this.storeKitSubscriptions.values())
-        .filter(
-          (candidate) =>
-            candidate.installation_id === installationId &&
-            readableEnvironments.includes(candidate.environment)
-        )
-        .sort((left, right) => {
-          const leftRank = this.storeKitRowActive(left, resolvedAt) ? 0 : 1
-          const rightRank = this.storeKitRowActive(right, resolvedAt) ? 0 : 1
-          return (
-            leftRank - rightRank ||
-            (left.environment === "Production" ? 0 : 1) -
-              (right.environment === "Production" ? 0 : 1) ||
-            right.perpetual - left.perpetual ||
-            (right.access_expires_at ?? "").localeCompare(left.access_expires_at ?? "") ||
-            right.last_verified_at.localeCompare(left.last_verified_at) ||
-            right.latest_transaction_id.localeCompare(left.latest_transaction_id)
-          )
-        })[0] ?? null
+      this.selectStoreKitSubscriptionsByInstallation(
+        installationId,
+        readableEnvironments,
+        resolvedAt
+      )[0] ?? null
     )
   }
 
@@ -578,6 +598,16 @@ export class MockD1Database {
           String(bindings[1]),
           Number(bindings[2])
         ) as T[]
+      }
+    }
+
+    if (sql.includes("FROM storekit_subscriptions") && sql.includes("WHERE installation_id = ?")) {
+      return {
+        results: this.selectStoreKitSubscriptionsByInstallation(
+          String(bindings[0]),
+          bindings.slice(1, -1).map(String),
+          String(bindings[bindings.length - 1])
+        ).map((row) => this.storeKitSubscriptionResult(row)) as T[]
       }
     }
 
@@ -761,6 +791,10 @@ export class MockD1Database {
           values.in_app_ownership_type as string | null,
           existing?.in_app_ownership_type
         ),
+        subscription_group_identifier: keep(
+          values.subscription_group_identifier as string | null,
+          existing?.subscription_group_identifier
+        ),
         latest_transaction_id: String(values.latest_transaction_id),
         app_bundle_id: String(values.app_bundle_id),
         product_id: String(values.product_id),
@@ -844,6 +878,10 @@ export class MockD1Database {
         in_app_ownership_type: keep(
           values.in_app_ownership_type as string | null,
           existing?.in_app_ownership_type
+        ),
+        subscription_group_identifier: keep(
+          values.subscription_group_identifier as string | null,
+          existing?.subscription_group_identifier
         ),
         app_bundle_id: String(values.app_bundle_id),
         product_id: String(values.product_id),
@@ -1117,6 +1155,7 @@ export class MockD1Database {
       installationId: row.installation_id,
       appAccountToken: row.app_account_token,
       inAppOwnershipType: row.in_app_ownership_type,
+      subscriptionGroupIdentifier: row.subscription_group_identifier,
       latestTransactionId: row.latest_transaction_id,
       appBundleId: row.app_bundle_id,
       productId: row.product_id,
