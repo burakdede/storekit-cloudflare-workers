@@ -1,0 +1,21 @@
+# Gitleaks false positives, ignored by exact fingerprint.
+#
+# The generic-api-key rule matches `appAccountToken` / `expectedAppAccountToken` in the test
+# fixtures because the field name ends in "Token". They are UUIDs standing in for the value an iOS
+# client passes to Product.purchase(options:) — not credentials, and not secret.
+#
+# Fingerprints rather than a rule allowlist, deliberately. A rule allowlist scoped to `test/` would
+# suppress every generic-api-key finding across the whole test tree; a fingerprint pins one finding
+# in one file at one line, so a secret that is new, moved, or of another kind still reports.
+#
+# Verified: with these in place, a realistic GitHub PAT planted in `src/config.ts` and in
+# `test/unit/storekit-router.test.ts` is reported in both cases.
+#
+# Both scan modes are listed: `gitleaks detect` reads git history, `--no-git` reads the working
+# tree, and the two fingerprint differently.
+test/unit/storekit-apple-sdk-conformance.test.ts:generic-api-key:137
+test/unit/storekit-apple-sdk-conformance.test.ts:generic-api-key:202
+test/unit/storekit-router.test.ts:generic-api-key:110
+test/unit/storekit-router.test.ts:generic-api-key:116
+test/unit/storekit-router.test.ts:generic-api-key:118
+test/unit/storekit-router.test.ts:generic-api-key:124
