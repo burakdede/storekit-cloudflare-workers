@@ -27,6 +27,7 @@ const DEFAULT_SNAPSHOT: StoreKitEntitlementSnapshot = {
   revocationPercentage: null,
   appAccountToken: null,
   inAppOwnershipType: "PURCHASED",
+  subscriptionGroupIdentifier: "21234567",
   isUpgraded: false,
   productType: "Auto-Renewable Subscription",
   offerDiscountType: null,

@@ -15,6 +15,7 @@ export interface StoreKitSubscriptionRecord {
   installationId: string | null
   appAccountToken: string | null
   inAppOwnershipType: string | null
+  subscriptionGroupIdentifier: string | null
   latestTransactionId: string
   productId: string
   status: string
@@ -85,6 +86,27 @@ async function storeKitD1First<T>(
   }
 }
 
+async function storeKitD1All<T>(
+  db: StoreKitDatabase | undefined,
+  statement: string,
+  bindings: unknown[],
+  operation: string
+): Promise<T[]> {
+  try {
+    const result = await requireStoreKitDb(db, operation)
+      .prepare(statement)
+      .bind(...bindings)
+      .all<T>()
+    return result.results ?? []
+  } catch (error) {
+    if (error instanceof StoreKitPersistenceError) throw error
+    throw new StoreKitPersistenceError(
+      error instanceof Error ? error.message : "unknown_error",
+      operation
+    )
+  }
+}
+
 /**
  * Run statements as one D1 batch, which D1 executes as a single transaction. That atomicity is
  * what keeps a notification from being recorded as processed when its entitlement write fails.
@@ -123,7 +145,7 @@ function monotonicWriteGuard(table: string): string {
 }
 
 const SUBSCRIPTION_COLUMNS = `original_transaction_id, environment, installation_id, app_account_token,
-  in_app_ownership_type, latest_transaction_id, app_bundle_id, product_id, status, expires_at, access_expires_at,
+  in_app_ownership_type, subscription_group_identifier, latest_transaction_id, app_bundle_id, product_id, status, expires_at, access_expires_at,
   perpetual, grace_period_expires_at, is_trial, revocation_date, revocation_reason,
   revocation_type, revocation_percentage, is_upgraded, product_type,
   offer_discount_type, latest_signed_date, auto_renew_status, auto_renew_product_id,
@@ -131,7 +153,7 @@ const SUBSCRIPTION_COLUMNS = `original_transaction_id, environment, installation
   last_verified_at, created_at, updated_at`
 
 const TRANSACTION_COLUMNS = `transaction_id, environment, original_transaction_id, web_order_line_item_id,
-  installation_id, app_account_token, in_app_ownership_type, app_bundle_id, product_id, purchase_date, expires_at,
+  installation_id, app_account_token, in_app_ownership_type, subscription_group_identifier, app_bundle_id, product_id, purchase_date, expires_at,
   access_expires_at, perpetual, revocation_date, revocation_reason, revocation_type,
   revocation_percentage, status, pro_active, source, is_upgraded,
   product_type, offer_discount_type, latest_signed_date, first_seen_at, last_seen_at`
@@ -155,11 +177,12 @@ function installationBindingRule(table: string, allowAccountTransfer: boolean): 
 
 function subscriptionUpsertStatement(allowAccountTransfer: boolean): string {
   return `INSERT INTO storekit_subscriptions (${SUBSCRIPTION_COLUMNS})
-    VALUES (${placeholders(32)})
+    VALUES (${placeholders(33)})
     ON CONFLICT(original_transaction_id, environment) DO UPDATE SET
       installation_id = ${installationBindingRule("storekit_subscriptions", allowAccountTransfer)},
       app_account_token = COALESCE(excluded.app_account_token, storekit_subscriptions.app_account_token),
       in_app_ownership_type = COALESCE(excluded.in_app_ownership_type, storekit_subscriptions.in_app_ownership_type),
+      subscription_group_identifier = COALESCE(excluded.subscription_group_identifier, storekit_subscriptions.subscription_group_identifier),
       latest_transaction_id = excluded.latest_transaction_id,
       app_bundle_id = excluded.app_bundle_id,
       product_id = excluded.product_id,
@@ -191,13 +214,14 @@ function subscriptionUpsertStatement(allowAccountTransfer: boolean): string {
 
 function transactionUpsertStatement(allowAccountTransfer: boolean): string {
   return `INSERT INTO storekit_transactions (${TRANSACTION_COLUMNS})
-    VALUES (${placeholders(26)})
+    VALUES (${placeholders(27)})
     ON CONFLICT(transaction_id, environment) DO UPDATE SET
       original_transaction_id = excluded.original_transaction_id,
       web_order_line_item_id = COALESCE(excluded.web_order_line_item_id, storekit_transactions.web_order_line_item_id),
       installation_id = ${installationBindingRule("storekit_transactions", allowAccountTransfer)},
       app_account_token = COALESCE(excluded.app_account_token, storekit_transactions.app_account_token),
       in_app_ownership_type = COALESCE(excluded.in_app_ownership_type, storekit_transactions.in_app_ownership_type),
+      subscription_group_identifier = COALESCE(excluded.subscription_group_identifier, storekit_transactions.subscription_group_identifier),
       app_bundle_id = excluded.app_bundle_id,
       product_id = excluded.product_id,
       purchase_date = COALESCE(excluded.purchase_date, storekit_transactions.purchase_date),
@@ -231,6 +255,7 @@ function subscriptionBindings(
     installationId,
     snapshot.appAccountToken,
     snapshot.inAppOwnershipType,
+    snapshot.subscriptionGroupIdentifier,
     snapshot.latestTransactionId,
     appBundleId,
     snapshot.productId,
@@ -275,6 +300,7 @@ function transactionBindings(
     installationId,
     snapshot.appAccountToken,
     snapshot.inAppOwnershipType,
+    snapshot.subscriptionGroupIdentifier,
     appBundleId,
     snapshot.productId,
     snapshot.purchaseDate,
@@ -345,12 +371,33 @@ function snapshotProjectionStatements(
  *
  * Kept in one place so a column added to the table cannot reach one reader and miss another.
  */
+/**
+ * Best-entitlement-first ordering: currently-active rows, then production over sandbox, then
+ * perpetual, then the longest remaining access. Takes the caller's clock as its one binding.
+ *
+ * Shared so the single-entitlement read and the per-group read cannot disagree about which row
+ * wins.
+ */
+const SUBSCRIPTION_RANKING = `ORDER BY
+      CASE
+        WHEN status IN ('active_trial', 'active_paid', 'grace_period')
+          AND (perpetual = 1 OR (access_expires_at IS NOT NULL AND access_expires_at > ?))
+          THEN 0
+        ELSE 1
+      END,
+      CASE WHEN environment = 'Production' THEN 0 ELSE 1 END,
+      perpetual DESC,
+      access_expires_at DESC,
+      last_verified_at DESC,
+      latest_transaction_id DESC`
+
 const SUBSCRIPTION_RECORD_COLUMNS = `SELECT
       original_transaction_id AS originalTransactionId,
       environment,
       installation_id AS installationId,
       app_account_token AS appAccountToken,
       in_app_ownership_type AS inAppOwnershipType,
+      subscription_group_identifier AS subscriptionGroupIdentifier,
       latest_transaction_id AS latestTransactionId,
       product_id AS productId,
       status,
@@ -422,18 +469,7 @@ export async function loadStoreKitSubscriptionByInstallation(
     FROM storekit_subscriptions
     WHERE installation_id = ?
       AND environment IN (${environmentPlaceholders})
-    ORDER BY
-      CASE
-        WHEN status IN ('active_trial', 'active_paid', 'grace_period')
-          AND (perpetual = 1 OR (access_expires_at IS NOT NULL AND access_expires_at > ?))
-          THEN 0
-        ELSE 1
-      END,
-      CASE WHEN environment = 'Production' THEN 0 ELSE 1 END,
-      perpetual DESC,
-      access_expires_at DESC,
-      last_verified_at DESC,
-      latest_transaction_id DESC
+    ${SUBSCRIPTION_RANKING}
     LIMIT 1`,
     [installationId, ...readableEnvironments, resolvedAt.toISOString()],
     "storekit_subscription_select_by_installation"
@@ -447,6 +483,42 @@ export interface StoreKitPersistOptions {
    * Off by default. See `StoreKitOwnershipConflictError`.
    */
   allowAccountTransfer?: boolean | undefined
+}
+
+/**
+ * Every entitlement an account holds, one per subscription group.
+ *
+ * Apple allows at most one active subscription per group, so a group is the unit an entitlement is
+ * resolved within: rows inside a group compete and the best one wins, while separate groups are
+ * concurrent and all of them are returned. A non-subscription purchase has no group and is keyed
+ * by product, so a lifetime unlock sits alongside a subscription rather than displacing it.
+ */
+export async function listStoreKitSubscriptionsByInstallation(
+  installationId: string,
+  resolvedAt: Date,
+  readableEnvironments: string[],
+  db: StoreKitDatabase | undefined
+): Promise<StoreKitSubscriptionRecord[]> {
+  if (readableEnvironments.length === 0) return []
+  const environmentPlaceholders = readableEnvironments.map(() => "?").join(", ")
+  const rows = await storeKitD1All<StoreKitSubscriptionRecord>(
+    db,
+    `${SUBSCRIPTION_RECORD_COLUMNS}
+    FROM storekit_subscriptions
+    WHERE installation_id = ?
+      AND environment IN (${environmentPlaceholders})
+    ${SUBSCRIPTION_RANKING}`,
+    [installationId, ...readableEnvironments, resolvedAt.toISOString()],
+    "storekit_subscription_list_by_installation"
+  )
+
+  // Rows arrive best-first, so the first one seen for a key is the winner for that key.
+  const best = new Map<string, StoreKitSubscriptionRecord>()
+  for (const row of rows) {
+    const key = row.subscriptionGroupIdentifier ?? `product:${row.productId}`
+    if (!best.has(key)) best.set(key, row)
+  }
+  return [...best.values()]
 }
 
 export async function persistStoreKitSubscriptionForInstallation(

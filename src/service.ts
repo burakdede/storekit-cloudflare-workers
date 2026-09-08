@@ -18,6 +18,7 @@ import {
   type VerifiedStoreKitTransaction
 } from "./verification.js"
 import {
+  listStoreKitSubscriptionsByInstallation,
   loadStoreKitSubscriptionByInstallation,
   loadStoreKitSubscriptionByTransaction,
   loadStoreKitSubscriptionOwner,
@@ -81,6 +82,7 @@ export interface StoreKitNotificationProcessResult {
 export interface StoreKitCurrentEntitlement {
   proActive: boolean
   productId: string | null
+  subscriptionGroupIdentifier?: string | null
   expiresAt: string | null
   accessExpiresAt: string | null
   isTrial: boolean
@@ -481,6 +483,69 @@ export async function readStoreKitEntitlement(
   )
 }
 
+/**
+ * One resolved entitlement out of the set an account holds.
+ *
+ * Shaped like `StoreKitCurrentEntitlement` minus the account-wide fields, because it describes one
+ * group rather than the account.
+ */
+export interface StoreKitEntitlementEntry {
+  proActive: boolean
+  productId: string | null
+  subscriptionGroupIdentifier: string | null
+  expiresAt: string | null
+  accessExpiresAt: string | null
+  perpetual: boolean
+  isTrial: boolean
+  status: string
+  environment: string
+  inAppOwnershipType: string | null
+  autoRenewStatus: number | null
+  autoRenewProductId: string | null
+}
+
+function entitlementEntry(
+  record: StoreKitSubscriptionRecord,
+  resolvedAt: Date
+): StoreKitEntitlementEntry {
+  return {
+    proActive: isStoreKitRecordActive(record, resolvedAt),
+    productId: record.productId,
+    subscriptionGroupIdentifier: record.subscriptionGroupIdentifier,
+    expiresAt: record.expiresAt,
+    accessExpiresAt: record.accessExpiresAt,
+    perpetual: record.perpetual === true || record.perpetual === 1,
+    isTrial: record.isTrial === true || record.isTrial === 1,
+    status: record.status,
+    environment: record.environment,
+    inAppOwnershipType: record.inAppOwnershipType,
+    autoRenewStatus: record.autoRenewStatus,
+    autoRenewProductId: record.autoRenewProductId
+  }
+}
+
+/**
+ * Every entitlement an account currently holds, one per subscription group.
+ *
+ * An app with more than one subscription group, or a lifetime unlock alongside a subscription, has
+ * concurrent entitlements. `getStoreKitEntitlement` answers "what tier is this user on" with the
+ * single best one; this answers "what do they own".
+ */
+export async function listStoreKitEntitlements(
+  installationId: string,
+  readableEnvironments: string[],
+  config: Pick<StoreKitServiceConfig, "d1">,
+  resolvedAt = new Date()
+): Promise<StoreKitEntitlementEntry[]> {
+  const records = await listStoreKitSubscriptionsByInstallation(
+    installationId,
+    resolvedAt,
+    readableEnvironments,
+    config.d1
+  )
+  return records.map((record) => entitlementEntry(record, resolvedAt))
+}
+
 export async function getStoreKitEntitlement(
   installationId: string,
   readableEnvironments: string[],
@@ -497,6 +562,7 @@ export async function getStoreKitEntitlement(
     return {
       proActive: false,
       productId: null,
+      subscriptionGroupIdentifier: null,
       expiresAt: null,
       accessExpiresAt: null,
       isTrial: false,
@@ -511,6 +577,7 @@ export async function getStoreKitEntitlement(
   return {
     proActive: isStoreKitRecordActive(record, resolvedAt),
     productId: record.productId,
+    subscriptionGroupIdentifier: record.subscriptionGroupIdentifier,
     expiresAt: record.expiresAt,
     accessExpiresAt: record.accessExpiresAt,
     isTrial: record.isTrial === true || record.isTrial === 1,

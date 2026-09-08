@@ -63,6 +63,18 @@
 
 ### Integration surface
 
+- **Subscription groups are modelled, so an app with more than one product is served correctly.**
+  `subscriptionGroupIdentifier` is stored on both projections, and `GET /storekit/entitlement` now
+  returns an `entitlements` array with one entry per group alongside the existing top-level fields.
+  Previously the read ended in `LIMIT 1` and a second concurrent entitlement was simply invisible.
+- Apple permits one active subscription per group, so entries within a group compete and separate
+  groups are concurrent. A non-subscription purchase has no group and is keyed by product, which is
+  what lets a lifetime unlock coexist with a subscription.
+- The top-level fields are unchanged and still describe the single best entitlement, so a
+  one-product integration needs no change. New `listStoreKitEntitlements` and
+  `listStoreKitSubscriptionsByInstallation` exports; `StoreKitPreparedStatement` gains `all()`.
+  Migration `0005_subscription_group.sql`.
+
 - **`onEntitlementChange` lets a host react to an entitlement changing.** Previously a refund could
   arrive, the projection update, and the application never find out; `onEvent` is a log sink, not a
   change feed. The hook receives the previous projection, the new snapshot, which fields differ, and

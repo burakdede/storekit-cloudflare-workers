@@ -13,11 +13,12 @@
 export interface StoreKitPreparedStatement {
   bind(..._values: unknown[]): StoreKitPreparedStatement
   first<T = Record<string, unknown>>(): Promise<T | null>
+  all<T = Record<string, unknown>>(): Promise<{ results: T[] }>
 }
 
 /**
- * The D1 binding, narrowed to the two calls this package makes: a bound single-row read, and a
- * batch, which D1 runs as one transaction.
+ * The D1 binding, narrowed to the calls this package makes: bound single-row and multi-row reads,
+ * and a batch, which D1 runs as one transaction.
  */
 export interface StoreKitD1Database {
   prepare(_query: string): StoreKitPreparedStatement

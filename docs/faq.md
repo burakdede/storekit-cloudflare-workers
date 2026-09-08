@@ -154,6 +154,20 @@ A family-shared purchase grants access by default, because that is what Family S
 as `status: "family_shared"` with `proActive: false`. Use the field rather than the flag for
 reporting — counting five family members as five subscribers is the mistake it exists to prevent.
 
+### I sell two subscriptions. Does it handle that?
+
+Yes. `GET /storekit/entitlement` returns an `entitlements` array with one entry per subscription
+group, and `listStoreKitEntitlements` is the equivalent call in TypeScript.
+
+Apple allows at most one active subscription per group, so a group is the unit an entitlement
+resolves within: entries inside a group compete and the best wins, while separate groups — "Pro" and
+"Extra Storage", say — are concurrent and both come back. A non-consumable has no group and is keyed
+by product, so a lifetime unlock coexists with a subscription rather than displacing it.
+
+The top-level fields still describe the single best entitlement, so a one-product app needs no
+change. If you sell more than one thing, read the array: gating a second product on the top-level
+`productId` lets whichever entitlement ranks highest decide both.
+
 ### Do non-consumables (lifetime unlocks) work?
 
 Yes, and they never expire. A non-consumable has no `expiresDate`; treating a missing expiry as

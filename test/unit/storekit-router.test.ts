@@ -243,6 +243,22 @@ describe("StoreKit drop-in router", () => {
     expect(hookRan).toBe(true)
   })
 
+  it("serves every entitlement alongside the best one", async () => {
+    const db = new MockD1Database()
+    const workerEnv = { ...env(), STOREKIT_DB: db as unknown as D1Database }
+
+    const response = await handler().fetch(
+      new Request("https://example.com/storekit/entitlement"),
+      workerEnv
+    )
+    const body = (await response?.json()) as { status: string; entitlements: unknown[] }
+
+    // The top-level fields stay exactly as they were, so a one-product client needs no change.
+    expect(response?.status).toBe(200)
+    expect(body.status).toBe("free")
+    expect(body.entitlements).toEqual([])
+  })
+
   it("answers 503 for a retryable storage failure so Apple redelivers", async () => {
     processStoreKitNotification.mockRejectedValueOnce(
       new StoreKitPersistenceError("d1 down", "storekit_notification_insert", true)
