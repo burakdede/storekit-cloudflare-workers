@@ -80,6 +80,14 @@ export function storeKitAllowGracePeriodAccess(env: StoreKitEnv): boolean {
 }
 
 /**
+ * Whether a `FAMILY_SHARED` purchase grants access. Defaults to `true`, which is Apple's intent:
+ * the organiser bought it so their family could use it.
+ */
+export function storeKitAllowFamilySharing(env: StoreKitEnv): boolean {
+  return flag(env.STOREKIT_ALLOW_FAMILY_SHARING, true)
+}
+
+/**
  * Whether a sync may move an entitlement that is already bound to a different account.
  *
  * Defaults to `false`. A signed transaction proves a purchase happened, not who owns it, so
@@ -157,6 +165,7 @@ export interface StoreKitConfigReport {
   allowAppleLookupFallback: boolean
   allowSandboxPreRelease: boolean
   allowAccountTransfer: boolean
+  allowFamilySharing: boolean
   /** Which secrets are present. Values are never reported, only presence. */
   secretsPresent: Record<string, boolean>
 }
@@ -230,6 +239,7 @@ export function describeStoreKitConfig(env: StoreKitEnv): StoreKitConfigReport {
     allowAppleLookupFallback: storeKitAppleLookupFallbackEnabled(env),
     allowSandboxPreRelease: storeKitSandboxPreReleaseEnabled(env),
     allowAccountTransfer: storeKitAllowAccountTransfer(env),
+    allowFamilySharing: storeKitAllowFamilySharing(env),
     secretsPresent
   }
 }

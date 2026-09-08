@@ -72,6 +72,7 @@ const snapshot: StoreKitEntitlementSnapshot = {
   revocationDate: null,
   revocationReason: null,
   appAccountToken: null,
+  inAppOwnershipType: "PURCHASED",
   productType: "Auto-Renewable Subscription",
   offerDiscountType: null,
   signedDate: "2026-06-02T12:00:00.000Z",

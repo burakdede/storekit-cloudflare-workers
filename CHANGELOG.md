@@ -17,6 +17,26 @@
   it to a single call rather than enabling it deployment-wide.
 - New `StoreKitOwnershipConflictError` and `loadStoreKitSubscriptionOwner` exports.
 
+### Apple contract
+
+- **Family Sharing is now modelled.** Apple marks every transaction `PURCHASED` or `FAMILY_SHARED`;
+  the module read neither. `inAppOwnershipType` is carried through the policy, the snapshot, both D1
+  projections and the entitlement read. A shared purchase still grants access by default, which is
+  Apple's intent, but hosts can now see which entitlements are shared — needed for per-seat products
+  and for reporting that should not count five family members as five subscribers.
+- `STOREKIT_ALLOW_FAMILY_SHARING` / `allowFamilySharing` (default on) excludes shared purchases,
+  which then resolve as the new `family_shared` status. Ownership is decided before billing state, so
+  an excluded share does not report `grace_period` and prompt a payment update at a non-payer.
+- A transaction signed before Apple added the field reports `null` and is treated as purchased, so
+  no existing entitlement changes on upgrade.
+- Migration `0002_in_app_ownership_type.sql` adds the column to both projections.
+
+### API
+
+- `resolveStoreKitEntitlementCore(input, now?, policy?)` now takes a `StoreKitEntitlementPolicy`
+  object. The original `allowGracePeriodAccess` boolean is still accepted in its place, so existing
+  calls keep working.
+
 ## 0.1.0
 
 First release. Server-authoritative StoreKit 2 for Cloudflare Workers and D1.

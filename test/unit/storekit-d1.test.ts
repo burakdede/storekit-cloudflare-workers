@@ -24,6 +24,7 @@ const snapshot: StoreKitEntitlementSnapshot = {
   revocationDate: null,
   revocationReason: null,
   appAccountToken: "account-token-1",
+  inAppOwnershipType: "PURCHASED",
   productType: "Auto-Renewable Subscription",
   offerDiscountType: null,
   signedDate: "2026-06-02T12:00:00.000Z",
@@ -60,6 +61,32 @@ describe("StoreKit D1 adapter", () => {
       original_transaction_id: "original-1",
       status: "active_paid"
     })
+  })
+
+  it("round-trips the Family Sharing ownership type through both projections", async () => {
+    const db = new MockD1Database()
+
+    await persistStoreKitSubscriptionForInstallation(
+      { ...snapshot, inAppOwnershipType: "FAMILY_SHARED" },
+      "installation-1",
+      "com.example.app",
+      env(db)
+    )
+
+    expect(db.getStoreKitSubscriptionRows()[0]).toMatchObject({
+      in_app_ownership_type: "FAMILY_SHARED"
+    })
+    expect(db.getStoreKitTransactionRows()[0]).toMatchObject({
+      in_app_ownership_type: "FAMILY_SHARED"
+    })
+    expect(
+      await loadStoreKitSubscriptionByInstallation(
+        "installation-1",
+        new Date("2026-06-03T12:00:00.000Z"),
+        ["Sandbox"],
+        env(db)
+      )
+    ).toMatchObject({ inAppOwnershipType: "FAMILY_SHARED" })
   })
 
   it("records transaction-less notifications without creating entitlement state", async () => {

@@ -37,6 +37,7 @@ export interface StoreKitEnv {
   STOREKIT_ALLOW_GRACE_PERIOD_ACCESS?: string
   STOREKIT_RECONCILE_NOTIFICATIONS?: string
   STOREKIT_ALLOW_ACCOUNT_TRANSFER?: string
+  STOREKIT_ALLOW_FAMILY_SHARING?: string
   STOREKIT_BUNDLE_ID?: string
   APP_STORE_CONNECT_ISSUER_ID?: string
   APP_STORE_CONNECT_KEY_ID?: string
@@ -54,6 +55,8 @@ export type StoreKitEntitlementStatus =
   | "expired"
   | "revoked"
   | "refunded"
+  /** A `FAMILY_SHARED` purchase excluded by policy. Only ever set when family sharing is off. */
+  | "family_shared"
   | "unknown"
 
 /** Where the authoritative claims behind a snapshot came from. */
@@ -91,6 +94,13 @@ export interface StoreKitEntitlementSnapshot {
   revocationDate: string | null
   revocationReason: number | null
   appAccountToken: string | null
+  /**
+   * `PURCHASED` or `FAMILY_SHARED`, or `null` on material signed before Apple added the field.
+   *
+   * A family-shared entitlement is a real one — Apple intends the family member to have access —
+   * so it is reported rather than filtered, and `proActive` still respects it by default.
+   */
+  inAppOwnershipType: string | null
   productType: string | null
   offerDiscountType: string | null
   /** Apple's signing time for the material behind this snapshot; the out-of-order write guard. */

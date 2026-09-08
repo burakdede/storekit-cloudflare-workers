@@ -22,17 +22,18 @@ containing no certificate block, a non-numeric app ID, an empty product allow-li
 
 ## Worker variables
 
-| Variable                               | Required             | Meaning                                                                      |
-| -------------------------------------- | -------------------- | ---------------------------------------------------------------------------- |
-| `STOREKIT_ALLOWED_ENVIRONMENTS`        | yes                  | `Production`, `Sandbox`, or both comma-separated. Production is tried first. |
-| `STOREKIT_BUNDLE_ID`                   | yes                  | Exact App Store bundle ID. Transactions for any other bundle are rejected.   |
-| `STOREKIT_ALLOWED_PRODUCT_IDS`         | yes                  | Closed, comma-separated product allow-list.                                  |
-| `APP_STORE_APP_APPLE_ID`               | production only      | Numeric app ID; Apple requires it to verify production notifications.        |
-| `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK` | no (default `true`)  | `false` fails sync closed when Apple's API is unreachable. See below.        |
-| `STOREKIT_ALLOW_GRACE_PERIOD_ACCESS`   | no (default `true`)  | Whether a billing grace period keeps access. Apple's intent is that it does. |
-| `STOREKIT_RECONCILE_NOTIFICATIONS`     | no (default `true`)  | Re-read Apple's status on each notification instead of trusting the payload. |
-| `STOREKIT_ALLOW_SANDBOX_PRE_RELEASE`   | no (default `false`) | Allows sandbox transactions on a production deployment. See below.           |
-| `STOREKIT_ALLOW_ACCOUNT_TRANSFER`      | no (default `false`) | Lets a sync move an entitlement off the account that owns it. See below.     |
+| Variable                               | Required             | Meaning                                                                           |
+| -------------------------------------- | -------------------- | --------------------------------------------------------------------------------- |
+| `STOREKIT_ALLOWED_ENVIRONMENTS`        | yes                  | `Production`, `Sandbox`, or both comma-separated. Production is tried first.      |
+| `STOREKIT_BUNDLE_ID`                   | yes                  | Exact App Store bundle ID. Transactions for any other bundle are rejected.        |
+| `STOREKIT_ALLOWED_PRODUCT_IDS`         | yes                  | Closed, comma-separated product allow-list.                                       |
+| `APP_STORE_APP_APPLE_ID`               | production only      | Numeric app ID; Apple requires it to verify production notifications.             |
+| `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK` | no (default `true`)  | `false` fails sync closed when Apple's API is unreachable. See below.             |
+| `STOREKIT_ALLOW_GRACE_PERIOD_ACCESS`   | no (default `true`)  | Whether a billing grace period keeps access. Apple's intent is that it does.      |
+| `STOREKIT_RECONCILE_NOTIFICATIONS`     | no (default `true`)  | Re-read Apple's status on each notification instead of trusting the payload.      |
+| `STOREKIT_ALLOW_SANDBOX_PRE_RELEASE`   | no (default `false`) | Allows sandbox transactions on a production deployment. See below.                |
+| `STOREKIT_ALLOW_ACCOUNT_TRANSFER`      | no (default `false`) | Lets a sync move an entitlement off the account that owns it. See below.          |
+| `STOREKIT_ALLOW_FAMILY_SHARING`        | no (default `true`)  | Whether a `FAMILY_SHARED` purchase grants access. Apple's intent is that it does. |
 
 Booleans accept `true/1/yes/on` and `false/0/no/off`; anything else falls back to the default.
 
@@ -102,6 +103,23 @@ it already checked.
 
 Either way the choice never weakens signature verification, and the source used is reported to your
 event sink.
+
+## `STOREKIT_ALLOW_FAMILY_SHARING`
+
+Apple marks every transaction `PURCHASED` or `FAMILY_SHARED`, and the module reports which through
+`inAppOwnershipType` either way.
+
+Leave this on unless you have a specific reason not to. If a product is eligible for Family Sharing,
+the organiser bought it so their family could use it, and cutting a family member off is a support
+ticket rather than a saved subscription. Turn it off for a genuinely per-seat product, and expect the
+excluded member to resolve as `status: "family_shared"` with `proActive: false`.
+
+Ownership is decided before billing state, so an excluded share stays `family_shared` even during a
+grace period, rather than reporting `grace_period` and prompting a payment update at somebody who is
+not paying.
+
+A transaction Apple signed before it added `inAppOwnershipType` reports `null` and is treated as
+purchased. Defaulting the other way would revoke every entitlement already in your D1.
 
 ## `STOREKIT_ALLOW_ACCOUNT_TRANSFER`
 

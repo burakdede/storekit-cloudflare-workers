@@ -112,6 +112,16 @@ reading.
 No. Every notification UUID goes into a replay ledger, written in the same atomic D1 batch as the
 projection. A redelivery answers `200` with `replayed: true` and writes nothing twice.
 
+### Does it handle Family Sharing?
+
+Yes. Apple marks each transaction `PURCHASED` or `FAMILY_SHARED`, and the snapshot reports which
+through `inAppOwnershipType`.
+
+A family-shared purchase grants access by default, because that is what Family Sharing is for. Set
+`STOREKIT_ALLOW_FAMILY_SHARING=false` for a genuinely per-seat product; excluded members then resolve
+as `status: "family_shared"` with `proActive: false`. Use the field rather than the flag for
+reporting — counting five family members as five subscribers is the mistake it exists to prevent.
+
 ### Do non-consumables (lifetime unlocks) work?
 
 Yes, and they never expire. A non-consumable has no `expiresDate`; treating a missing expiry as

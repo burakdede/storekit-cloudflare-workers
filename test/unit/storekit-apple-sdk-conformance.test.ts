@@ -20,6 +20,7 @@ import {
   AutoRenewStatus,
   Environment,
   ExpirationIntent,
+  InAppOwnershipType,
   OfferDiscountType,
   OfferType,
   RevocationReason,
@@ -102,6 +103,24 @@ describe("Apple SDK conformance", () => {
 
       expect(snapshot.autoRenewStatus).toBe(AutoRenewStatus.OFF)
       expect(snapshot.expirationIntent).toBe(ExpirationIntent.BILLING_ERROR)
+    })
+
+    // The family-sharing rule compares against the bare literal "FAMILY_SHARED". TypeScript cannot
+    // catch it drifting, because both sides stay ordinary strings.
+    it("excludes a family-shared purchase by Apple's own ownership enum", () => {
+      const shared = resolveStoreKitEntitlementCore(
+        entitlementInput({ inAppOwnershipType: InAppOwnershipType.FAMILY_SHARED }),
+        undefined,
+        { allowFamilySharing: false }
+      )
+      const purchased = resolveStoreKitEntitlementCore(
+        entitlementInput({ inAppOwnershipType: InAppOwnershipType.PURCHASED }),
+        undefined,
+        { allowFamilySharing: false }
+      )
+
+      expect(shared.status).toBe("family_shared")
+      expect(purchased.status).toBe("active_paid")
     })
 
     it("stores Apple's revocation reason as-is", () => {

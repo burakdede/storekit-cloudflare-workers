@@ -78,10 +78,21 @@ describe("public StoreKit module entrypoint", () => {
     expect(offenders).toEqual([])
   })
 
-  it("ships the D1 schema it needs as a Wrangler migration", () => {
-    const migrations = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql"))
-    expect(migrations).toHaveLength(1)
-    const schema = readFileSync(join(MIGRATIONS_DIR, migrations[0]!), "utf8")
+  it("ships the D1 schema it needs as ordered Wrangler migrations", () => {
+    const migrations = readdirSync(MIGRATIONS_DIR)
+      .filter((name) => name.endsWith(".sql"))
+      .sort()
+
+    expect(migrations.length).toBeGreaterThan(0)
+    // Wrangler applies migrations in filename order, so the numeric prefixes must be unique and
+    // gapless. A duplicate prefix is the mistake that silently skips a migration.
+    expect(migrations.map((name) => name.slice(0, 4))).toEqual(
+      migrations.map((_, index) => String(index + 1).padStart(4, "0"))
+    )
+
+    const schema = migrations
+      .map((name) => readFileSync(join(MIGRATIONS_DIR, name), "utf8"))
+      .join("\n")
 
     for (const table of [
       "storekit_subscriptions",
@@ -91,7 +102,12 @@ describe("public StoreKit module entrypoint", () => {
       expect(schema).toContain(`CREATE TABLE IF NOT EXISTS ${table}`)
     }
     // Columns the entitlement and out-of-order guards depend on.
-    for (const column of ["access_expires_at", "latest_signed_date", "grace_period_expires_at"]) {
+    for (const column of [
+      "access_expires_at",
+      "latest_signed_date",
+      "grace_period_expires_at",
+      "in_app_ownership_type"
+    ]) {
       expect(schema).toContain(column)
     }
   })

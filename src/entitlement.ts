@@ -32,6 +32,8 @@ export interface StoreKitEntitlementTransaction {
   offerDiscountType?: string | undefined
   signedDate?: number | undefined
   type?: string | undefined
+  /** `PURCHASED` or `FAMILY_SHARED`. Absent on transactions signed before Apple added it. */
+  inAppOwnershipType?: string | undefined
 }
 
 /**
@@ -73,6 +75,52 @@ export interface StoreKitEntitlementInput {
 const INTRODUCTORY_OFFER = 1
 const FREE_TRIAL = "FREE_TRIAL"
 const NON_CONSUMABLE = "Non-Consumable"
+const FAMILY_SHARED = "FAMILY_SHARED"
+
+/**
+ * How the policy treats states Apple leaves to the developer.
+ *
+ * Both default to granting access, which is Apple's own intent: a customer in a billing grace
+ * period is still being served, and a family member is meant to use what the organiser bought.
+ */
+export interface StoreKitEntitlementPolicy {
+  allowGracePeriodAccess?: boolean | undefined
+  /**
+   * Whether a `FAMILY_SHARED` purchase grants access. Turn it off only for products where a shared
+   * entitlement genuinely should not count, such as a per-seat licence.
+   */
+  allowFamilySharing?: boolean | undefined
+}
+
+interface ResolvedStoreKitEntitlementPolicy {
+  allowGracePeriodAccess: boolean
+  allowFamilySharing: boolean
+}
+
+/**
+ * Accept either the options object or the original `allowGracePeriodAccess` boolean.
+ *
+ * The boolean was the whole policy surface before family sharing existed. Keeping it working costs
+ * three lines and spares every existing caller a rewrite.
+ */
+function resolvePolicy(
+  policy: boolean | StoreKitEntitlementPolicy | undefined
+): ResolvedStoreKitEntitlementPolicy {
+  const options = typeof policy === "boolean" ? { allowGracePeriodAccess: policy } : (policy ?? {})
+  return {
+    allowGracePeriodAccess: options.allowGracePeriodAccess ?? true,
+    allowFamilySharing: options.allowFamilySharing ?? true
+  }
+}
+
+/**
+ * Apple omits `inAppOwnershipType` on older signed material. Absent means the customer bought it:
+ * defaulting the other way would revoke access for every transaction signed before Apple added
+ * the field.
+ */
+function isFamilyShared(transaction: StoreKitEntitlementTransaction): boolean {
+  return transaction.inAppOwnershipType === FAMILY_SHARED
+}
 
 function isoFromAppleMillis(value: number | undefined): string | null {
   if (!Number.isFinite(value)) return null
@@ -151,15 +199,16 @@ function hasAccessWindow(
 function isCandidateActive(
   candidate: StoreKitEntitlementCandidate,
   now: Date,
-  allowGracePeriodAccess: boolean
+  policy: ResolvedStoreKitEntitlementPolicy
 ): boolean {
   const { transaction, status, renewalInfo } = candidate
   if (!isValidEntitlementProduct(transaction)) return false
   if (transaction.revocationDate) return false
+  if (!policy.allowFamilySharing && isFamilyShared(transaction)) return false
   if (status === STATUS.EXPIRED || status === STATUS.REVOKED) return false
   if (status === STATUS.BILLING_RETRY) return false
   if (status === STATUS.BILLING_GRACE_PERIOD) {
-    return allowGracePeriodAccess && isWithinGracePeriod(renewalInfo, now)
+    return policy.allowGracePeriodAccess && isWithinGracePeriod(renewalInfo, now)
   }
   if (status !== undefined && status !== STATUS.ACTIVE) return false
   return hasAccessWindow(transaction, status, renewalInfo, now)
@@ -231,6 +280,7 @@ function baseSnapshot(
     revocationDate: isoFromAppleMillis(transaction.revocationDate),
     revocationReason: transaction.revocationReason ?? null,
     appAccountToken: transaction.appAccountToken ?? null,
+    inAppOwnershipType: transaction.inAppOwnershipType ?? null,
     productType: transaction.type ?? null,
     offerDiscountType: transaction.offerDiscountType ?? null,
     signedDate: isoFromAppleMillis(transaction.signedDate ?? renewalInfo?.signedDate),
@@ -250,8 +300,9 @@ function baseSnapshot(
 export function resolveStoreKitEntitlementCore(
   input: StoreKitEntitlementInput,
   now = new Date(),
-  allowGracePeriodAccess = true
+  policy: boolean | StoreKitEntitlementPolicy = {}
 ): StoreKitEntitlementSnapshot {
+  const resolvedPolicy = resolvePolicy(policy)
   const submittedSource: StoreKitEntitlementSource =
     input.verificationSource === "apple_transaction_lookup"
       ? "apple_transaction_lookup"
@@ -267,8 +318,8 @@ export function resolveStoreKitEntitlementCore(
       ? [...input.subscriptionTransactions]
       : [submittedCandidate]
   ).sort((left, right) => {
-    const leftActive = isCandidateActive(left, now, allowGracePeriodAccess)
-    const rightActive = isCandidateActive(right, now, allowGracePeriodAccess)
+    const leftActive = isCandidateActive(left, now, resolvedPolicy)
+    const rightActive = isCandidateActive(right, now, resolvedPolicy)
     if (leftActive !== rightActive) return leftActive ? -1 : 1
     return compareCandidates(left, right)
   })
@@ -285,6 +336,13 @@ export function resolveStoreKitEntitlementCore(
   if (status === STATUS.REVOKED) {
     return baseSnapshot(candidate, input.environment, "revoked", false, now)
   }
+  // Resolved before the status branches because the exclusion is a property of who owns the
+  // purchase, not of how it is currently billing: a family-shared subscription in a grace period
+  // is still excluded, and reporting it as `grace_period` would invite a payment-update prompt
+  // aimed at someone who is not paying for it.
+  if (!resolvedPolicy.allowFamilySharing && isFamilyShared(transaction)) {
+    return baseSnapshot(candidate, input.environment, "family_shared", false, now)
+  }
   // Grace period and billing retry are resolved before the expiry check on purpose: in both
   // states the transaction's own expiresDate has already elapsed, so an expiry-first order would
   // report every grace-period customer as "expired" and revoke paid access.
@@ -293,7 +351,13 @@ export function resolveStoreKitEntitlementCore(
     if (!withinGrace) {
       return baseSnapshot(candidate, input.environment, "expired", false, now)
     }
-    return baseSnapshot(candidate, input.environment, "grace_period", allowGracePeriodAccess, now)
+    return baseSnapshot(
+      candidate,
+      input.environment,
+      "grace_period",
+      resolvedPolicy.allowGracePeriodAccess,
+      now
+    )
   }
   if (status === STATUS.BILLING_RETRY) {
     return baseSnapshot(candidate, input.environment, "billing_retry", false, now)

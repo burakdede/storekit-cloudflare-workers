@@ -5,7 +5,7 @@
  * service combines Apple verification, entitlement policy, and the D1 adapter so a Worker can use
  * the module through one call per operation.
  */
-import { resolveStoreKitEntitlementCore } from "./entitlement.js"
+import { resolveStoreKitEntitlementCore, type StoreKitEntitlementPolicy } from "./entitlement.js"
 import { StoreKitOwnershipConflictError, StoreKitVerificationError } from "./errors.js"
 import type { StoreKitEntitlementSnapshot, StoreKitEnv } from "./types.js"
 import {
@@ -32,6 +32,8 @@ export interface StoreKitServiceConfig {
   /** The D1 binding to persist into, e.g. `env.STOREKIT_DB`. */
   d1: StoreKitDatabase
   allowGracePeriodAccess?: boolean
+  /** Whether a `FAMILY_SHARED` purchase grants access. Defaults to `true`, Apple's intent. */
+  allowFamilySharing?: boolean | undefined
   sandboxAllowed?: boolean
   /**
    * Re-read `Get All Subscription Statuses` when a notification arrives instead of projecting the
@@ -86,6 +88,16 @@ export interface StoreKitCurrentEntitlement {
 }
 
 const ACTIVE_STOREKIT_STATUSES = new Set(["active_trial", "active_paid", "grace_period"])
+
+/** Collect the policy knobs a service config carries into the shape the kernel takes. */
+function entitlementPolicy(
+  config: Pick<StoreKitServiceConfig, "allowGracePeriodAccess" | "allowFamilySharing">
+): StoreKitEntitlementPolicy {
+  return {
+    allowGracePeriodAccess: config.allowGracePeriodAccess ?? true,
+    allowFamilySharing: config.allowFamilySharing ?? true
+  }
+}
 
 /**
  * Re-evaluate a stored projection at read time.
@@ -150,11 +162,7 @@ export async function syncStoreKitTransaction(
     )
   }
 
-  const snapshot = resolveStoreKitEntitlement(
-    verified,
-    config.now,
-    config.allowGracePeriodAccess ?? true
-  )
+  const snapshot = resolveStoreKitEntitlement(verified, config.now, entitlementPolicy(config))
 
   const allowAccountTransfer = config.allowAccountTransfer === true
   if (snapshot.originalTransactionId && input.installationId && !allowAccountTransfer) {
@@ -201,7 +209,7 @@ async function resolveNotificationSnapshot(
   const transaction = verified.transaction
   if (!transaction) return { snapshot: null, reconciled: false }
 
-  const allowGracePeriodAccess = config.allowGracePeriodAccess ?? true
+  const policy = entitlementPolicy(config)
   const originalTransactionId = transaction.originalTransactionId
   if (originalTransactionId && config.reconcileNotificationsWithApple !== false) {
     const state = await lookupStoreKitSubscriptionState(originalTransactionId, runtime)
@@ -216,7 +224,7 @@ async function resolveNotificationSnapshot(
             subscriptionTransactions: state.subscriptionTransactions
           },
           config.now,
-          allowGracePeriodAccess
+          policy
         ),
         reconciled: true
       }
@@ -241,7 +249,7 @@ async function resolveNotificationSnapshot(
         verificationSource: "posted_jws"
       },
       config.now,
-      allowGracePeriodAccess
+      policy
     ),
     reconciled: false
   }

@@ -24,6 +24,7 @@ these documents when Apple changes notification fields or API behavior:
 | `revocationDate` / `revocationReason`   | Refunds and family-sharing revocations; terminal                       |
 | `signedDate`                            | Apple's signing time, used to order out-of-order notification delivery |
 | `type`                                  | Identifies a non-consumable, which never expires                       |
+| `inAppOwnershipType` (transaction)      | `PURCHASED` vs `FAMILY_SHARED`; drives the family-sharing policy       |
 
 The service intentionally treats Apple-signed data as authoritative only after signature, bundle,
 environment, product, and transaction identity validation. It does not implement legacy receipt or
@@ -44,7 +45,7 @@ It covers three things.
 cannot catch a literal that stops matching Apple's enum, because both sides remain ordinary strings
 and numbers. Each literal is therefore asserted equal to the SDK's own exported enum
 (`OfferDiscountType`, `Type`, `OfferType`, `Status`, `Environment`, `RevocationReason`,
-`AutoRenewStatus`, `ExpirationIntent`). Without this, an SDK bump could misclassify every trial as
+`AutoRenewStatus`, `ExpirationIntent`, `InAppOwnershipType`). Without this, an SDK bump could misclassify every trial as
 paid, or revoke every non-consumable, with a green test suite.
 
 **Shape drift.** Type-level assignments prove Apple's `JWSTransactionDecodedPayload` and

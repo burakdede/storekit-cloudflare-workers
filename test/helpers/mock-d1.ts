@@ -66,6 +66,7 @@ type StoreKitSubscriptionRow = {
   environment: string
   installation_id: string | null
   app_account_token: string | null
+  in_app_ownership_type: string | null
   latest_transaction_id: string
   app_bundle_id: string
   product_id: string
@@ -110,6 +111,7 @@ type StoreKitTransactionRow = {
   web_order_line_item_id: string | null
   installation_id: string | null
   app_account_token: string | null
+  in_app_ownership_type: string | null
   app_bundle_id: string
   product_id: string
   purchase_date: string | null
@@ -232,6 +234,7 @@ export class MockD1Database {
   seedStoreKitSubscription(
     row: Omit<
       StoreKitSubscriptionRow,
+      | "in_app_ownership_type"
       | "access_expires_at"
       | "perpetual"
       | "grace_period_expires_at"
@@ -250,6 +253,7 @@ export class MockD1Database {
       Partial<StoreKitSubscriptionRow>
   ): void {
     const seeded: StoreKitSubscriptionRow = {
+      in_app_ownership_type: null,
       access_expires_at: row.expires_at,
       perpetual: 0,
       grace_period_expires_at: null,
@@ -330,6 +334,29 @@ export class MockD1Database {
 
   private entitlementKey(hash: string, environment: string, bundleId: string): string {
     return `${hash}:${environment}:${bundleId}`
+  }
+
+  /**
+   * Zip an INSERT's column list with its bindings.
+   *
+   * The StoreKit upserts are wide and grow a column whenever Apple's contract does. Reading them
+   * positionally means renumbering every index by hand on each change, where an off-by-one
+   * silently asserts the wrong column rather than failing. Parsing the column names out of the
+   * statement keeps the mock honest for free.
+   */
+  private insertedColumns(sql: string, bindings: unknown[]): Record<string, unknown> {
+    const columnList = /INSERT(?: OR IGNORE)? INTO \w+\s*\(([^)]*)\)/.exec(sql)?.[1]
+    if (!columnList) throw new Error(`Could not read column list from SQL: ${sql}`)
+    const columns = columnList
+      .split(",")
+      .map((column) => column.trim())
+      .filter(Boolean)
+    if (columns.length !== bindings.length) {
+      throw new Error(
+        `Column/binding mismatch. columns=${columns.length} bindings=${bindings.length}`
+      )
+    }
+    return Object.fromEntries(columns.map((column, index) => [column, bindings[index]]))
   }
 
   /**
@@ -683,90 +710,134 @@ export class MockD1Database {
     }
 
     if (sql.includes("INSERT INTO storekit_subscriptions")) {
-      const key = this.storeKitSubscriptionKey(String(bindings[0]), String(bindings[1]))
+      const values = this.insertedColumns(sql, bindings)
+      const key = this.storeKitSubscriptionKey(
+        String(values.original_transaction_id),
+        String(values.environment)
+      )
       const existing = this.storeKitSubscriptions.get(key)
-      const revocationDate = (bindings[13] as string | null) ?? null
-      const latestSignedDate = (bindings[17] as string | null) ?? null
+      const revocationDate = (values.revocation_date as string | null) ?? null
+      const latestSignedDate = (values.latest_signed_date as string | null) ?? null
       if (existing && !this.storeKitWriteWins(revocationDate, latestSignedDate, existing)) return
+      const keep = <T>(incoming: T, previous: T | undefined): T =>
+        (incoming ?? previous ?? null) as T
       const row: StoreKitSubscriptionRow = {
-        original_transaction_id: String(bindings[0]),
-        environment: String(bindings[1]),
+        original_transaction_id: String(values.original_transaction_id),
+        environment: String(values.environment),
         installation_id: this.resolveInstallationBinding(
           sql,
           "storekit_subscriptions",
-          bindings[2] as string | null,
+          values.installation_id as string | null,
           existing?.installation_id
         ),
-        app_account_token: (bindings[3] as string | null) ?? existing?.app_account_token ?? null,
-        latest_transaction_id: String(bindings[4]),
-        app_bundle_id: String(bindings[5]),
-        product_id: String(bindings[6]),
-        status: String(bindings[7]),
-        expires_at: (bindings[8] as string | null) ?? null,
-        access_expires_at: (bindings[9] as string | null) ?? null,
-        perpetual: Number(bindings[10]),
-        grace_period_expires_at: (bindings[11] as string | null) ?? null,
-        is_trial: Number(bindings[12]),
+        app_account_token: keep(
+          values.app_account_token as string | null,
+          existing?.app_account_token
+        ),
+        in_app_ownership_type: keep(
+          values.in_app_ownership_type as string | null,
+          existing?.in_app_ownership_type
+        ),
+        latest_transaction_id: String(values.latest_transaction_id),
+        app_bundle_id: String(values.app_bundle_id),
+        product_id: String(values.product_id),
+        status: String(values.status),
+        expires_at: (values.expires_at as string | null) ?? null,
+        access_expires_at: (values.access_expires_at as string | null) ?? null,
+        perpetual: Number(values.perpetual),
+        grace_period_expires_at: (values.grace_period_expires_at as string | null) ?? null,
+        is_trial: Number(values.is_trial),
         revocation_date: revocationDate,
-        revocation_reason: (bindings[14] as number | null) ?? null,
-        product_type: (bindings[15] as string | null) ?? existing?.product_type ?? null,
-        offer_discount_type:
-          (bindings[16] as string | null) ?? existing?.offer_discount_type ?? null,
+        revocation_reason: (values.revocation_reason as number | null) ?? null,
+        product_type: keep(values.product_type as string | null, existing?.product_type),
+        offer_discount_type: keep(
+          values.offer_discount_type as string | null,
+          existing?.offer_discount_type
+        ),
         latest_signed_date: latestSignedDate ?? existing?.latest_signed_date ?? null,
-        auto_renew_status: (bindings[18] as number | null) ?? existing?.auto_renew_status ?? null,
-        auto_renew_product_id:
-          (bindings[19] as string | null) ?? existing?.auto_renew_product_id ?? null,
-        expiration_intent: (bindings[20] as number | null) ?? existing?.expiration_intent ?? null,
-        is_in_billing_retry:
-          (bindings[21] as number | null) ?? existing?.is_in_billing_retry ?? null,
-        price_increase_status:
-          (bindings[22] as number | null) ?? existing?.price_increase_status ?? null,
-        renewal_price: (bindings[23] as number | null) ?? existing?.renewal_price ?? null,
-        currency: (bindings[24] as string | null) ?? existing?.currency ?? null,
-        last_verified_at: String(bindings[25]),
-        created_at: existing?.created_at ?? String(bindings[26]),
-        updated_at: String(bindings[27])
+        auto_renew_status: keep(
+          values.auto_renew_status as number | null,
+          existing?.auto_renew_status
+        ),
+        auto_renew_product_id: keep(
+          values.auto_renew_product_id as string | null,
+          existing?.auto_renew_product_id
+        ),
+        expiration_intent: keep(
+          values.expiration_intent as number | null,
+          existing?.expiration_intent
+        ),
+        is_in_billing_retry: keep(
+          values.is_in_billing_retry as number | null,
+          existing?.is_in_billing_retry
+        ),
+        price_increase_status: keep(
+          values.price_increase_status as number | null,
+          existing?.price_increase_status
+        ),
+        renewal_price: keep(values.renewal_price as number | null, existing?.renewal_price),
+        currency: keep(values.currency as string | null, existing?.currency),
+        last_verified_at: String(values.last_verified_at),
+        created_at: existing?.created_at ?? String(values.created_at),
+        updated_at: String(values.updated_at)
       }
       this.storeKitSubscriptions.set(key, row)
       return
     }
 
     if (sql.includes("INSERT INTO storekit_transactions")) {
-      const key = this.storeKitTransactionKey(String(bindings[0]), String(bindings[1]))
+      const values = this.insertedColumns(sql, bindings)
+      const key = this.storeKitTransactionKey(
+        String(values.transaction_id),
+        String(values.environment)
+      )
       const existing = this.storeKitTransactions.get(key)
-      const revocationDate = (bindings[12] as string | null) ?? null
-      const latestSignedDate = (bindings[19] as string | null) ?? null
+      const revocationDate = (values.revocation_date as string | null) ?? null
+      const latestSignedDate = (values.latest_signed_date as string | null) ?? null
       if (existing && !this.storeKitWriteWins(revocationDate, latestSignedDate, existing)) return
+      const keep = <T>(incoming: T, previous: T | undefined): T =>
+        (incoming ?? previous ?? null) as T
       const row: StoreKitTransactionRow = {
-        transaction_id: String(bindings[0]),
-        environment: String(bindings[1]),
-        original_transaction_id: String(bindings[2]),
-        web_order_line_item_id:
-          (bindings[3] as string | null) ?? existing?.web_order_line_item_id ?? null,
+        transaction_id: String(values.transaction_id),
+        environment: String(values.environment),
+        original_transaction_id: String(values.original_transaction_id),
+        web_order_line_item_id: keep(
+          values.web_order_line_item_id as string | null,
+          existing?.web_order_line_item_id
+        ),
         installation_id: this.resolveInstallationBinding(
           sql,
           "storekit_transactions",
-          bindings[4] as string | null,
+          values.installation_id as string | null,
           existing?.installation_id
         ),
-        app_account_token: (bindings[5] as string | null) ?? existing?.app_account_token ?? null,
-        app_bundle_id: String(bindings[6]),
-        product_id: String(bindings[7]),
-        purchase_date: (bindings[8] as string | null) ?? existing?.purchase_date ?? null,
-        expires_at: (bindings[9] as string | null) ?? null,
-        access_expires_at: (bindings[10] as string | null) ?? null,
-        perpetual: Number(bindings[11]),
+        app_account_token: keep(
+          values.app_account_token as string | null,
+          existing?.app_account_token
+        ),
+        in_app_ownership_type: keep(
+          values.in_app_ownership_type as string | null,
+          existing?.in_app_ownership_type
+        ),
+        app_bundle_id: String(values.app_bundle_id),
+        product_id: String(values.product_id),
+        purchase_date: keep(values.purchase_date as string | null, existing?.purchase_date),
+        expires_at: (values.expires_at as string | null) ?? null,
+        access_expires_at: (values.access_expires_at as string | null) ?? null,
+        perpetual: Number(values.perpetual),
         revocation_date: revocationDate,
-        revocation_reason: (bindings[13] as number | null) ?? null,
-        status: String(bindings[14]),
-        pro_active: Number(bindings[15]),
-        source: String(bindings[16]),
-        product_type: (bindings[17] as string | null) ?? existing?.product_type ?? null,
-        offer_discount_type:
-          (bindings[18] as string | null) ?? existing?.offer_discount_type ?? null,
+        revocation_reason: (values.revocation_reason as number | null) ?? null,
+        status: String(values.status),
+        pro_active: Number(values.pro_active),
+        source: String(values.source),
+        product_type: keep(values.product_type as string | null, existing?.product_type),
+        offer_discount_type: keep(
+          values.offer_discount_type as string | null,
+          existing?.offer_discount_type
+        ),
         latest_signed_date: latestSignedDate ?? existing?.latest_signed_date ?? null,
-        first_seen_at: existing?.first_seen_at ?? String(bindings[20]),
-        last_seen_at: String(bindings[21])
+        first_seen_at: existing?.first_seen_at ?? String(values.first_seen_at),
+        last_seen_at: String(values.last_seen_at)
       }
       this.storeKitTransactions.set(key, row)
       return
@@ -1016,6 +1087,7 @@ export class MockD1Database {
       environment: row.environment,
       installationId: row.installation_id,
       appAccountToken: row.app_account_token,
+      inAppOwnershipType: row.in_app_ownership_type,
       latestTransactionId: row.latest_transaction_id,
       appBundleId: row.app_bundle_id,
       productId: row.product_id,
