@@ -192,6 +192,57 @@ describe("StoreKit drop-in router", () => {
     })
   })
 
+  it("reports an entitlement change hook failure to the event sink without failing the request", async () => {
+    // The service swallows the hook error and reports it; the router turns that into an event.
+    syncStoreKitTransaction.mockImplementationOnce(
+      async (_input: unknown, config: { onEntitlementChangeError?: (_e: unknown) => void }) => {
+        config.onEntitlementChangeError?.(new Error("host database is down"))
+        return { snapshot, verified: {} }
+      }
+    )
+    const events: Record<string, unknown>[] = []
+
+    const response = await handler({
+      onEntitlementChange: () => {},
+      onEvent: (event) => events.push(event)
+    }).fetch(syncRequest({ signedTransactionJWS: validJws }), env())
+
+    expect(response?.status).toBe(200)
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        event: "storekit_entitlement_change_hook_failed",
+        message: "host database is down"
+      })
+    )
+  })
+
+  it("hands the change hook to waitUntil when asked, so it outlives the response", async () => {
+    const pending: Promise<unknown>[] = []
+    let deliver: ((_change: unknown) => void | Promise<void>) | undefined
+    syncStoreKitTransaction.mockImplementationOnce(
+      async (_input: unknown, config: { onEntitlementChange?: (_c: unknown) => void }) => {
+        deliver = config.onEntitlementChange
+        return { snapshot, verified: {} }
+      }
+    )
+    let hookRan = false
+
+    const response = await handler({
+      entitlementChangeMode: "waitUntil",
+      onEntitlementChange: async () => {
+        hookRan = true
+      }
+    }).fetch(syncRequest({ signedTransactionJWS: validJws }), env(), {
+      waitUntil: (promise: Promise<unknown>) => pending.push(promise)
+    })
+    deliver?.({})
+
+    expect(response?.status).toBe(200)
+    expect(pending).toHaveLength(1)
+    await Promise.all(pending)
+    expect(hookRan).toBe(true)
+  })
+
   it("answers 503 for a retryable storage failure so Apple redelivers", async () => {
     processStoreKitNotification.mockRejectedValueOnce(
       new StoreKitPersistenceError("d1 down", "storekit_notification_insert", true)

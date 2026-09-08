@@ -74,6 +74,7 @@ export {
 
 export {
   loadStoreKitSubscriptionByInstallation,
+  loadStoreKitSubscriptionByTransaction,
   loadStoreKitSubscriptionOwner,
   persistStoreKitNotification,
   persistStoreKitSubscriptionForInstallation,
@@ -91,6 +92,9 @@ export {
   readStoreKitEntitlement,
   syncStoreKitTransaction,
   type StoreKitCurrentEntitlement,
+  type StoreKitEntitlementChange,
+  type StoreKitEntitlementChangeField,
+  type StoreKitEntitlementChangeHook,
   type StoreKitNotificationProcessResult,
   type StoreKitServiceConfig,
   type StoreKitTransactionSyncInput,

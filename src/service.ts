@@ -19,6 +19,7 @@ import {
 } from "./verification.js"
 import {
   loadStoreKitSubscriptionByInstallation,
+  loadStoreKitSubscriptionByTransaction,
   loadStoreKitSubscriptionOwner,
   persistStoreKitNotification,
   persistStoreKitSubscriptionForInstallation,
@@ -48,6 +49,10 @@ export interface StoreKitServiceConfig {
    * take another customer's access away.
    */
   allowAccountTransfer?: boolean | undefined
+  /** Called after a write that changed the entitlement. See `StoreKitEntitlementChangeHook`. */
+  onEntitlementChange?: StoreKitEntitlementChangeHook | undefined
+  /** Reports a hook that threw. The write already succeeded, so this never fails the request. */
+  onEntitlementChangeError?: ((_error: unknown) => void) | undefined
   now?: Date
 }
 
@@ -89,6 +94,82 @@ export interface StoreKitCurrentEntitlement {
 
 const ACTIVE_STOREKIT_STATUSES = new Set(["active_trial", "active_paid", "grace_period"])
 
+/* eslint-disable no-unused-vars -- Structural callback signature names its parameter only for typing. */
+
+/**
+ * What caused an entitlement to change.
+ *
+ * `previous` is the stored projection as it was before this write, or `null` when nothing was on
+ * record. `next` is the snapshot just persisted.
+ */
+export interface StoreKitEntitlementChange {
+  accountId: string | null
+  previous: StoreKitSubscriptionRecord | null
+  next: StoreKitEntitlementSnapshot
+  /** Which of the significant fields differ. Never empty; the hook does not fire otherwise. */
+  changed: StoreKitEntitlementChangeField[]
+  source: "sync" | "notification"
+  notification?: { uuid: string; type: string; subtype: string | null } | undefined
+}
+
+export type StoreKitEntitlementChangeField =
+  | "proActive"
+  | "status"
+  | "productId"
+  | "accessExpiresAt"
+  | "autoRenewStatus"
+  | "autoRenewProductId"
+  | "revocationType"
+
+/**
+ * Called after a write that changed the entitlement.
+ *
+ * This is where a host mirrors the entitlement onto its own tables, sends the payment-failure push
+ * that saves a subscription, or releases server-side resources on a refund. It never fires for an
+ * idempotent re-sync or a replayed notification.
+ */
+export type StoreKitEntitlementChangeHook = (
+  _change: StoreKitEntitlementChange
+) => void | Promise<void>
+
+/* eslint-enable no-unused-vars */
+
+/**
+ * The fields worth waking a host application for.
+ *
+ * Deliberately not every field: `resolvedAt` and `lastVerifiedAt` move on every write, and firing
+ * on those would make the hook a write log rather than a change feed. `accessExpiresAt` is
+ * included because that is what a renewal moves, and a renewal is a change a host cares about.
+ */
+const SIGNIFICANT_CHANGE_FIELDS: StoreKitEntitlementChangeField[] = [
+  "proActive",
+  "status",
+  "productId",
+  "accessExpiresAt",
+  "autoRenewStatus",
+  "autoRenewProductId",
+  "revocationType"
+]
+
+function previousChangeValue(
+  previous: StoreKitSubscriptionRecord,
+  field: StoreKitEntitlementChangeField
+): unknown {
+  // The stored row spells booleans as 0/1, so `proActive` is recomputed rather than read.
+  if (field === "proActive") return isStoreKitRecordActive(previous, new Date())
+  return previous[field]
+}
+
+function storeKitEntitlementChangedFields(
+  previous: StoreKitSubscriptionRecord | null,
+  next: StoreKitEntitlementSnapshot
+): StoreKitEntitlementChangeField[] {
+  if (!previous) return [...SIGNIFICANT_CHANGE_FIELDS]
+  return SIGNIFICANT_CHANGE_FIELDS.filter(
+    (field) => previousChangeValue(previous, field) !== next[field]
+  )
+}
+
 /** Collect the policy knobs a service config carries into the shape the kernel takes. */
 function entitlementPolicy(
   config: Pick<StoreKitServiceConfig, "allowGracePeriodAccess" | "allowFamilySharing">
@@ -115,6 +196,73 @@ export function isStoreKitRecordActive(
   if (!record.accessExpiresAt) return false
   const deadline = Date.parse(record.accessExpiresAt)
   return Number.isFinite(deadline) && deadline > now.getTime()
+}
+
+/**
+ * Persist a snapshot and tell the host if the entitlement actually changed.
+ *
+ * The read of the previous state happens before the write, because a change feed cannot be
+ * derived after the fact. A hook that throws is reported and swallowed: the write already
+ * committed, and failing the response here would make Apple redeliver a notification that was in
+ * fact processed, or make a customer's successful purchase look like a server error.
+ */
+async function persistAndAnnounce(
+  snapshot: StoreKitEntitlementSnapshot,
+  accountId: string | null,
+  appBundleId: string,
+  config: StoreKitServiceConfig,
+  source: StoreKitEntitlementChange["source"],
+  notification?: StoreKitEntitlementChange["notification"],
+  persistOptions: { allowAccountTransfer?: boolean } = {}
+): Promise<void> {
+  const announcing = Boolean(config.onEntitlementChange && snapshot.originalTransactionId)
+  const previous = announcing
+    ? await loadStoreKitSubscriptionByTransaction(
+        snapshot.originalTransactionId as string,
+        snapshot.environment,
+        config.d1
+      )
+    : null
+
+  if (notification) {
+    await persistStoreKitNotification(
+      {
+        uuid: notification.uuid,
+        type: notification.type,
+        subtype: notification.subtype,
+        environment: snapshot.environment,
+        originalTransactionId: snapshot.originalTransactionId,
+        transactionId: snapshot.latestTransactionId
+      },
+      snapshot,
+      appBundleId,
+      config.d1
+    )
+  } else {
+    await persistStoreKitSubscriptionForInstallation(
+      snapshot,
+      accountId,
+      appBundleId,
+      config.d1,
+      persistOptions
+    )
+  }
+
+  if (!announcing) return
+  const changed = storeKitEntitlementChangedFields(previous, snapshot)
+  if (changed.length === 0) return
+  try {
+    await config.onEntitlementChange?.({
+      accountId: accountId ?? previous?.installationId ?? null,
+      previous,
+      next: snapshot,
+      changed,
+      source,
+      notification
+    })
+  } catch (error) {
+    config.onEntitlementChangeError?.(error)
+  }
 }
 
 export async function syncStoreKitTransaction(
@@ -179,11 +327,13 @@ export async function syncStoreKitTransaction(
     }
   }
 
-  await persistStoreKitSubscriptionForInstallation(
+  await persistAndAnnounce(
     snapshot,
     input.installationId,
     input.appBundleId,
-    config.d1,
+    config,
+    "sync",
+    undefined,
     { allowAccountTransfer }
   )
   return { snapshot, verified }
@@ -290,19 +440,30 @@ export async function processStoreKitNotification(
 
   const { snapshot, reconciled } = await resolveNotificationSnapshot(verified, runtime, config)
 
-  await persistStoreKitNotification(
-    {
-      uuid: notificationUuid,
-      type: notificationType,
-      subtype: verified.notification.subtype ?? null,
-      environment: verified.environment,
-      originalTransactionId: verified.transaction?.originalTransactionId ?? null,
-      transactionId: verified.transaction?.transactionId ?? null
-    },
-    snapshot,
-    config.apple.STOREKIT_BUNDLE_ID ?? verified.transaction?.bundleId ?? "",
-    config.d1
-  )
+  const appBundleId = config.apple.STOREKIT_BUNDLE_ID ?? verified.transaction?.bundleId ?? ""
+  const notification = {
+    uuid: notificationUuid,
+    type: notificationType,
+    subtype: verified.notification.subtype ?? null
+  }
+
+  if (snapshot) {
+    await persistAndAnnounce(snapshot, null, appBundleId, config, "notification", notification)
+  } else {
+    // Nothing to project: a summary or transaction-less notification. Only the replay ledger
+    // entry is written, and there is no entitlement change to announce.
+    await persistStoreKitNotification(
+      {
+        ...notification,
+        environment: verified.environment,
+        originalTransactionId: null,
+        transactionId: null
+      },
+      null,
+      appBundleId,
+      config.d1
+    )
+  }
   return { processed: true, replayed: false, snapshot, reconciled, verified }
 }
 

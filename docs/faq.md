@@ -172,6 +172,30 @@ read. Production deployments should normally list `Production` alone.
 back to the already signature-verified claims in the submitted JWS. The trade-off is written up in
 [configuration.md](configuration.md#storekit_allow_apple_lookup_fallback).
 
+### How does my app find out when a subscription changes?
+
+`onEntitlementChange`. The package stores the entitlement; the hook is how your application learns
+about it — a refund arriving, a renewal, a grace period starting, a subscription lapsing.
+
+```ts
+createStoreKitWorker<Env>({
+  authenticate,
+  onEntitlementChange: async ({ accountId, next, changed }) => {
+    await mirrorTierOntoUser(accountId, next.proActive)
+    if (changed.includes("status") && next.status === "grace_period") {
+      await promptForPaymentUpdate(accountId)
+    }
+  }
+})
+```
+
+It fires only when the entitlement genuinely changed, so a client re-syncing at every launch and a
+notification Apple redelivered both fire nothing. A hook that throws is logged to `onEvent` and never
+fails the response — the write already committed, and answering non-2xx would make Apple redeliver a
+notification that was in fact processed.
+
+Full field list in [api.md](api.md#onentitlementchange).
+
 ### I missed notifications during an outage. How do I recover?
 
 Replay them from Apple's notification history, which is retained for six months, through

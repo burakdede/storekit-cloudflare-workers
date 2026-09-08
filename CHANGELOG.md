@@ -47,6 +47,21 @@
 - A superseded transaction standing alone resolves to the new `upgraded` status rather than
   `expired`, since the customer did not churn. Migration `0004_is_upgraded.sql` adds the column.
 
+### Integration surface
+
+- **`onEntitlementChange` lets a host react to an entitlement changing.** Previously a refund could
+  arrive, the projection update, and the application never find out; `onEvent` is a log sink, not a
+  change feed. The hook receives the previous projection, the new snapshot, which fields differ, and
+  the notification that caused it, so a host can mirror the tier onto its own tables, send the
+  payment-failure push, or release resources on a refund.
+- It fires only on a material change — timestamps that move on every write are excluded — so an
+  idempotent re-sync and a replayed notification fire nothing. A throwing hook is reported through
+  `onEvent` and never fails the response, since the write has already committed and a non-2xx answer
+  would make Apple redeliver a processed notification.
+- `entitlementChangeMode: "waitUntil"` hands the hook to the runtime instead of blocking the
+  response. `StoreKitHandler.fetch` now uses the `ctx` it already accepted.
+- New `loadStoreKitSubscriptionByTransaction` export.
+
 ### API
 
 - `resolveStoreKitEntitlementCore(input, now?, policy?)` now takes a `StoreKitEntitlementPolicy`

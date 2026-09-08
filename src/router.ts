@@ -30,6 +30,7 @@ import {
   getStoreKitEntitlement,
   processStoreKitNotification,
   syncStoreKitTransaction,
+  type StoreKitEntitlementChange,
   type StoreKitServiceConfig
 } from "./service.js"
 import {
@@ -126,6 +127,25 @@ export interface StoreKitHandlerOptions<TEnv extends StoreKitWorkerEnv = StoreKi
    * sync answers `409` and writes nothing.
    */
   allowAccountTransfer?: boolean | undefined
+  /**
+   * Called after a write that changed the entitlement: a renewal, an expiry, a refund, a grace
+   * period starting. This is where you mirror the entitlement onto your own tables, send the
+   * payment-failure push, or release server-side resources.
+   *
+   * It does not fire for an idempotent re-sync or a replayed notification, and a hook that throws
+   * is reported to `onEvent` without failing the response — otherwise Apple would redeliver a
+   * notification that was in fact processed.
+   *
+   * Awaited by default. Return quickly, or pass `entitlementChangeMode: "waitUntil"` to let the
+   * work outlive the response.
+   */
+  onEntitlementChange?: ((_change: StoreKitEntitlementChange) => void | Promise<void>) | undefined
+  /**
+   * `await` (default) blocks the response on the hook; `waitUntil` hands it to the runtime and
+   * responds immediately. `waitUntil` needs the `ctx` your Worker was called with, and falls back
+   * to awaiting when none was passed.
+   */
+  entitlementChangeMode?: "await" | "waitUntil" | undefined
   onEvent?: StoreKitEventSink | undefined
 }
 
@@ -257,11 +277,22 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
 ): StoreKitHandler<TEnv> {
   const paths: StoreKitRoutePaths = { ...storeKitRoutePaths, ...options.paths }
   const emit: StoreKitEventSink = (event) => options.onEvent?.(event)
+  const reportHookError = (error: unknown): void => {
+    emit({
+      level: "error",
+      event: "storekit_entitlement_change_hook_failed",
+      message: error instanceof Error ? error.message : "unknown_error"
+    })
+  }
   // eslint-disable-next-line no-unused-vars -- Structural callback signature names its parameter only for typing.
   const resolveDatabase: (_env: TEnv) => StoreKitDatabase | undefined =
     options.database ?? defaultDatabase
 
-  function serviceConfig(env: TEnv, context?: StoreKitRequestContext): StoreKitServiceConfig {
+  function serviceConfig(
+    env: TEnv,
+    context?: StoreKitRequestContext,
+    ctx?: StoreKitExecutionContext
+  ): StoreKitServiceConfig {
     // Code options win over Worker variables; the variables are the zero-code default so a
     // drop-in user configures policy in wrangler.jsonc rather than by editing source.
     const config: StoreKitServiceConfig = {
@@ -273,6 +304,18 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
         options.reconcileNotificationsWithApple ?? storeKitReconcileNotifications(env),
       allowAccountTransfer: options.allowAccountTransfer ?? storeKitAllowAccountTransfer(env)
     }
+    const hook = options.onEntitlementChange
+    if (hook) {
+      config.onEntitlementChange =
+        options.entitlementChangeMode === "waitUntil" && ctx
+          ? (change) => {
+              // Errors still reach onEvent: the service wraps the call, and a rejected promise
+              // handed to waitUntil would otherwise be an unhandled rejection.
+              ctx.waitUntil(Promise.resolve(hook(change)).catch(reportHookError))
+            }
+          : hook
+      config.onEntitlementChangeError = reportHookError
+    }
     if (context?.sandboxAllowed !== undefined) config.sandboxAllowed = context.sandboxAllowed
     return config
   }
@@ -280,7 +323,8 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
   async function handleSync(
     request: Request,
     env: TEnv,
-    context: StoreKitRequestContext
+    context: StoreKitRequestContext,
+    ctx?: StoreKitExecutionContext
   ): Promise<Response> {
     const body = await readJsonBody(request)
     if (!body) return errorResponse(400, "VALIDATION_ERROR", "Invalid StoreKit sync payload.")
@@ -303,7 +347,7 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
         installationId: context.accountId,
         appBundleId
       },
-      serviceConfig(env, context)
+      serviceConfig(env, context, ctx)
     )
     emit({
       level: "info",
@@ -332,7 +376,11 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
    * transient failure. A payload that fails verification is answered 401 rather than 200 so a
    * forged notification is never silently accepted.
    */
-  async function handleNotification(request: Request, env: TEnv): Promise<Response> {
+  async function handleNotification(
+    request: Request,
+    env: TEnv,
+    ctx?: StoreKitExecutionContext
+  ): Promise<Response> {
     const body = await readJsonBody(request)
     const signedPayload = body ? readString(body, "signedPayload", MAX_NOTIFICATION_LENGTH) : null
     if (!signedPayload) {
@@ -340,7 +388,10 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
     }
 
     try {
-      const result = await processStoreKitNotification(signedPayload, serviceConfig(env))
+      const result = await processStoreKitNotification(
+        signedPayload,
+        serviceConfig(env, undefined, ctx)
+      )
       emit({
         level: "info",
         event: result.replayed
@@ -368,7 +419,7 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
 
   return {
     paths,
-    async fetch(request, env): Promise<Response | null> {
+    async fetch(request, env, ctx): Promise<Response | null> {
       const { pathname } = new URL(request.url)
       const isSync = pathname === paths.sync
       const isEntitlement = pathname === paths.entitlement
@@ -381,14 +432,14 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
       }
 
       try {
-        if (isNotification) return await handleNotification(request, env)
+        if (isNotification) return await handleNotification(request, env, ctx)
 
         const context = await options.authenticate(request, env)
         if (!context) {
           return errorResponse(401, "UNAUTHORIZED", "Authentication is required.")
         }
         return isSync
-          ? await handleSync(request, env, context)
+          ? await handleSync(request, env, context, ctx)
           : await handleEntitlement(env, context)
       } catch (error) {
         const event = isNotification

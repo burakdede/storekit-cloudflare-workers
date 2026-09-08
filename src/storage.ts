@@ -340,33 +340,12 @@ function snapshotProjectionStatements(
  * describing an entitlement the caller does not own. The sticky binding rule in the upsert is what
  * actually protects the row; this read only decides what the caller is told.
  */
-export async function loadStoreKitSubscriptionOwner(
-  originalTransactionId: string,
-  environment: string,
-  db: StoreKitDatabase | undefined
-): Promise<string | null> {
-  const row = await storeKitD1First<{ installationId: string | null }>(
-    db,
-    `SELECT installation_id AS installationId
-    FROM storekit_subscriptions
-    WHERE original_transaction_id = ? AND environment = ?`,
-    [originalTransactionId, environment],
-    "storekit_subscription_select_owner"
-  )
-  return row?.installationId ?? null
-}
-
-export async function loadStoreKitSubscriptionByInstallation(
-  installationId: string,
-  resolvedAt: Date,
-  readableEnvironments: string[],
-  db: StoreKitDatabase | undefined
-): Promise<StoreKitSubscriptionRecord | null> {
-  if (readableEnvironments.length === 0) return null
-  const environmentPlaceholders = readableEnvironments.map(() => "?").join(", ")
-  return storeKitD1First<StoreKitSubscriptionRecord>(
-    db,
-    `SELECT
+/**
+ * The projection's read shape, shared by every query that returns a `StoreKitSubscriptionRecord`.
+ *
+ * Kept in one place so a column added to the table cannot reach one reader and miss another.
+ */
+const SUBSCRIPTION_RECORD_COLUMNS = `SELECT
       original_transaction_id AS originalTransactionId,
       environment,
       installation_id AS installationId,
@@ -395,7 +374,51 @@ export async function loadStoreKitSubscriptionByInstallation(
       price_increase_status AS priceIncreaseStatus,
       renewal_price AS renewalPrice,
       currency,
-      last_verified_at AS lastVerifiedAt
+      last_verified_at AS lastVerifiedAt`
+
+/** The stored projection for one transaction, regardless of which account it is bound to. */
+export async function loadStoreKitSubscriptionByTransaction(
+  originalTransactionId: string,
+  environment: string,
+  db: StoreKitDatabase | undefined
+): Promise<StoreKitSubscriptionRecord | null> {
+  return storeKitD1First<StoreKitSubscriptionRecord>(
+    db,
+    `${SUBSCRIPTION_RECORD_COLUMNS}
+    FROM storekit_subscriptions
+    WHERE original_transaction_id = ? AND environment = ?`,
+    [originalTransactionId, environment],
+    "storekit_subscription_select_by_transaction"
+  )
+}
+
+export async function loadStoreKitSubscriptionOwner(
+  originalTransactionId: string,
+  environment: string,
+  db: StoreKitDatabase | undefined
+): Promise<string | null> {
+  const row = await storeKitD1First<{ installationId: string | null }>(
+    db,
+    `SELECT installation_id AS installationId
+    FROM storekit_subscriptions
+    WHERE original_transaction_id = ? AND environment = ?`,
+    [originalTransactionId, environment],
+    "storekit_subscription_select_owner"
+  )
+  return row?.installationId ?? null
+}
+
+export async function loadStoreKitSubscriptionByInstallation(
+  installationId: string,
+  resolvedAt: Date,
+  readableEnvironments: string[],
+  db: StoreKitDatabase | undefined
+): Promise<StoreKitSubscriptionRecord | null> {
+  if (readableEnvironments.length === 0) return null
+  const environmentPlaceholders = readableEnvironments.map(() => "?").join(", ")
+  return storeKitD1First<StoreKitSubscriptionRecord>(
+    db,
+    `${SUBSCRIPTION_RECORD_COLUMNS}
     FROM storekit_subscriptions
     WHERE installation_id = ?
       AND environment IN (${environmentPlaceholders})
