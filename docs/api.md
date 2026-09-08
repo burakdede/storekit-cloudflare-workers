@@ -151,7 +151,8 @@ environment, product allow-list and credentials it was built with, so a cache ou
 `wrangler.jsonc` change would keep verifying against the old values.
 
 This is also the seam the end-to-end tests use — supplying a runtime whose Apple client is controlled
-while its verifier stays genuine.
+while its verifier stays genuine. Adopters can go further and stub the verifier too; see
+[testing.md](testing.md#2-your-integration-against-a-stubbed-apple).
 
 ### Notification types
 
