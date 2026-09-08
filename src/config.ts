@@ -80,6 +80,16 @@ export function storeKitAllowGracePeriodAccess(env: StoreKitEnv): boolean {
 }
 
 /**
+ * Whether a sync may move an entitlement that is already bound to a different account.
+ *
+ * Defaults to `false`. A signed transaction proves a purchase happened, not who owns it, so
+ * transfer is a deliberate operator decision rather than something possession of a JWS grants.
+ */
+export function storeKitAllowAccountTransfer(env: StoreKitEnv): boolean {
+  return flag(env.STOREKIT_ALLOW_ACCOUNT_TRANSFER, false)
+}
+
+/**
  * Whether each notification re-reads Apple's authoritative subscription status instead of
  * projecting the payload alone. Defaults to `true`.
  */
@@ -146,6 +156,7 @@ export interface StoreKitConfigReport {
   productIds: string[]
   allowAppleLookupFallback: boolean
   allowSandboxPreRelease: boolean
+  allowAccountTransfer: boolean
   /** Which secrets are present. Values are never reported, only presence. */
   secretsPresent: Record<string, boolean>
 }
@@ -218,6 +229,7 @@ export function describeStoreKitConfig(env: StoreKitEnv): StoreKitConfigReport {
     productIds,
     allowAppleLookupFallback: storeKitAppleLookupFallbackEnabled(env),
     allowSandboxPreRelease: storeKitSandboxPreReleaseEnabled(env),
+    allowAccountTransfer: storeKitAllowAccountTransfer(env),
     secretsPresent
   }
 }

@@ -22,6 +22,7 @@
 import type { StoreKitExecutionContext } from "./cloudflare.js"
 import {
   StoreKitConfigError,
+  StoreKitOwnershipConflictError,
   StoreKitPersistenceError,
   StoreKitVerificationError
 } from "./errors.js"
@@ -32,6 +33,7 @@ import {
   type StoreKitServiceConfig
 } from "./service.js"
 import {
+  storeKitAllowAccountTransfer,
   storeKitAllowGracePeriodAccess,
   storeKitConfiguredEnvironments,
   storeKitReconcileNotifications
@@ -112,6 +114,12 @@ export interface StoreKitHandlerOptions<TEnv extends StoreKitWorkerEnv = StoreKi
    * `STOREKIT_RECONCILE_NOTIFICATIONS` variable, which itself defaults to `true`.
    */
   reconcileNotificationsWithApple?: boolean | undefined
+  /**
+   * Whether a sync may move an entitlement already bound to another account. Defaults to the
+   * `STOREKIT_ALLOW_ACCOUNT_TRANSFER` variable, which itself defaults to `false`: a conflicting
+   * sync answers `409` and writes nothing.
+   */
+  allowAccountTransfer?: boolean | undefined
   onEvent?: StoreKitEventSink | undefined
 }
 
@@ -165,6 +173,22 @@ function readAppAccountToken(body: Record<string, unknown>): string | null | und
  * an attacker probing with forged payloads learns nothing about which check rejected them.
  */
 function responseForError(error: unknown, emit: StoreKitEventSink, event: string): Response {
+  if (error instanceof StoreKitOwnershipConflictError) {
+    // Unlike a verification failure, this one is worth explaining. The caller already holds the
+    // transaction, so the response reveals nothing they do not have, and "someone else owns this
+    // purchase" is the only message from which a client can build a sensible recovery flow.
+    emit({
+      level: "warn",
+      event: `${event}_ownership_conflict`,
+      originalTransactionId: error.originalTransactionId,
+      environment: error.environment
+    })
+    return errorResponse(
+      409,
+      "OWNERSHIP_CONFLICT",
+      "This purchase is already associated with a different account."
+    )
+  }
   if (error instanceof StoreKitConfigError) {
     emit({
       level: "error",
@@ -239,7 +263,8 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
       d1: resolveDatabase(env) as StoreKitDatabase,
       allowGracePeriodAccess: options.allowGracePeriodAccess ?? storeKitAllowGracePeriodAccess(env),
       reconcileNotificationsWithApple:
-        options.reconcileNotificationsWithApple ?? storeKitReconcileNotifications(env)
+        options.reconcileNotificationsWithApple ?? storeKitReconcileNotifications(env),
+      allowAccountTransfer: options.allowAccountTransfer ?? storeKitAllowAccountTransfer(env)
     }
     if (context?.sandboxAllowed !== undefined) config.sandboxAllowed = context.sandboxAllowed
     return config

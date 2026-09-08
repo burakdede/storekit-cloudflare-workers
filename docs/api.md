@@ -63,6 +63,7 @@ export default {
 | `paths`                           | `Partial<StoreKitRoutePaths>`                      | `/storekit/*`                                       | e.g. `{ sync: "/api/v1/iap/sync" }`.                                    |
 | `allowGracePeriodAccess`          | `boolean`                                          | `STOREKIT_ALLOW_GRACE_PERIOD_ACCESS`, itself `true` | Code wins over the variable.                                            |
 | `reconcileNotificationsWithApple` | `boolean`                                          | `STOREKIT_RECONCILE_NOTIFICATIONS`, itself `true`   | Re-read Apple's status per notification.                                |
+| `allowAccountTransfer`            | `boolean`                                          | `STOREKIT_ALLOW_ACCOUNT_TRANSFER`, itself `false`   | Let a sync take an entitlement off the account that owns it.            |
 | `onEvent`                         | `(event: Record<string, unknown>) => void`         | —                                                   | Structured logs. No secrets, payloads, or tokens are ever passed to it. |
 
 Returns `{ fetch, paths }`.
@@ -114,6 +115,7 @@ const { snapshot } = await syncStoreKitTransaction(
 | `d1`                              | `D1Database`  | The binding to persist into.                   |
 | `allowGracePeriodAccess`          | `boolean?`    | Defaults to the Worker variable.               |
 | `reconcileNotificationsWithApple` | `boolean?`    | Defaults to the Worker variable.               |
+| `allowAccountTransfer`            | `boolean?`    | Defaults to the Worker variable, itself off.   |
 | `sandboxAllowed`                  | `boolean?`    | Narrow the allowed environments for this call. |
 | `now`                             | `Date?`       | Inject the clock, for tests.                   |
 
@@ -163,13 +165,14 @@ seam the test suite injects at.
 The D1 adapter. It takes a database binding directly and never reads `env`, so your binding can be
 called anything.
 
-| Function                                                                        | Purpose                                                             |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `persistStoreKitSubscriptionForInstallation(snapshot, accountId, bundleId, db)` | Write the projection and audit row, guarded on Apple's signed date. |
-| `loadStoreKitSubscriptionByInstallation(accountId, now, environments, db)`      | Read one account's row.                                             |
-| `persistStoreKitNotification(notification, db)`                                 | Write the replay ledger entry and projection in one atomic batch.   |
-| `storeKitNotificationExists(uuid, db)`                                          | Replay check.                                                       |
-| `storeKitNotificationStatement(...)`                                            | The ledger statement, to compose into your own batch.               |
+| Function                                                                                  | Purpose                                                             |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `persistStoreKitSubscriptionForInstallation(snapshot, accountId, bundleId, db, options?)` | Write the projection and audit row, guarded on Apple's signed date. |
+| `loadStoreKitSubscriptionByInstallation(accountId, now, environments, db)`                | Read one account's row.                                             |
+| `loadStoreKitSubscriptionOwner(originalTransactionId, environment, db)`                   | The account a transaction is bound to, or `null`.                   |
+| `persistStoreKitNotification(notification, db)`                                           | Write the replay ledger entry and projection in one atomic batch.   |
+| `storeKitNotificationExists(uuid, db)`                                                    | Replay check.                                                       |
+| `storeKitNotificationStatement(...)`                                                      | The ledger statement, to compose into your own batch.               |
 
 Tables: `storekit_subscriptions` (projection), `storekit_transactions` (audit trail),
 `storekit_notifications` (replay ledger). The schema is
@@ -217,11 +220,12 @@ Request and response types come from `@apple/app-store-server-library`. Worked e
 
 ## Errors
 
-| Class                       | Meaning                                                    | Handler response               |
-| --------------------------- | ---------------------------------------------------------- | ------------------------------ |
-| `StoreKitConfigError`       | Missing or invalid Apple credentials. An operator error.   | `503 UPSTREAM_UNAVAILABLE`     |
-| `StoreKitVerificationError` | Signed material failed signature, identity, or policy.     | `400` (`401` on the webhook)   |
-| `StoreKitPersistenceError`  | A D1 operation failed. `retryable` distinguishes the case. | `503` if retryable, else `400` |
+| Class                            | Meaning                                                    | Handler response               |
+| -------------------------------- | ---------------------------------------------------------- | ------------------------------ |
+| `StoreKitConfigError`            | Missing or invalid Apple credentials. An operator error.   | `503 UPSTREAM_UNAVAILABLE`     |
+| `StoreKitVerificationError`      | Signed material failed signature, identity, or policy.     | `400` (`401` on the webhook)   |
+| `StoreKitPersistenceError`       | A D1 operation failed. `retryable` distinguishes the case. | `503` if retryable, else `400` |
+| `StoreKitOwnershipConflictError` | The transaction's entitlement belongs to another account.  | `409 OWNERSHIP_CONFLICT`       |
 
 `StoreKitVerificationError` carries `stage`, `sdkErrorName`, `appleHttpStatus`, and `appleApiError`
 for logging. None of it reaches the HTTP response — that is deliberate, see

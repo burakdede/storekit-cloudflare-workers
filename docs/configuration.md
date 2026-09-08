@@ -32,6 +32,7 @@ containing no certificate block, a non-numeric app ID, an empty product allow-li
 | `STOREKIT_ALLOW_GRACE_PERIOD_ACCESS`   | no (default `true`)  | Whether a billing grace period keeps access. Apple's intent is that it does. |
 | `STOREKIT_RECONCILE_NOTIFICATIONS`     | no (default `true`)  | Re-read Apple's status on each notification instead of trusting the payload. |
 | `STOREKIT_ALLOW_SANDBOX_PRE_RELEASE`   | no (default `false`) | Allows sandbox transactions on a production deployment. See below.           |
+| `STOREKIT_ALLOW_ACCOUNT_TRANSFER`      | no (default `false`) | Lets a sync move an entitlement off the account that owns it. See below.     |
 
 Booleans accept `true/1/yes/on` and `false/0/no/off`; anything else falls back to the default.
 
@@ -101,6 +102,23 @@ it already checked.
 
 Either way the choice never weakens signature verification, and the source used is reported to your
 event sink.
+
+## `STOREKIT_ALLOW_ACCOUNT_TRANSFER`
+
+The first account to sync a transaction owns its entitlement. A sync from any other account for the
+same transaction is refused with `409 OWNERSHIP_CONFLICT`, and nothing is written.
+
+That is the right default because a signed transaction is not a secret. The client holds it, and it
+turns up in debug logs, support tickets and screenshots. Without the rule, anyone who obtains one can
+post it and take the entitlement away from the customer who paid for it.
+
+Set this to `true` only behind a deliberate support flow — a customer who genuinely needs a purchase
+moved to a new account after losing access to the old one. It restores the behaviour where whoever
+posts a transaction takes it, for every request, so prefer scoping it to a single call:
+
+```ts
+createStoreKitHandler<Env>({ authenticate, allowAccountTransfer: isSupportInitiated })
+```
 
 ## `STOREKIT_ALLOW_SANDBOX_PRE_RELEASE`
 

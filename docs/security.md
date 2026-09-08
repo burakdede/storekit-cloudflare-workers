@@ -33,14 +33,32 @@ Every check happens before any entitlement is persisted:
 8. **Renewal info.** `signedRenewalInfo` is verified and identity-pinned the same way before the
    policy reads `gracePeriodExpiresDate` from it.
 9. **Account binding.** When `expectedAppAccountToken` is supplied, a mismatch is rejected.
+10. **Ownership.** If the transaction's entitlement is already bound to a different account, the
+    sync is refused rather than rebound.
 
 ## Replay and account takeover
 
-A signed transaction is a bearer artifact: whoever holds it can present it. Two controls matter.
+A signed transaction is a bearer artifact: whoever holds it can present it. It is not a secret — the
+client holds it, and it ends up in debug logs, support tickets and screenshots. Three controls
+matter.
+
+**The binding is sticky.** The first account to sync a transaction owns its entitlement. A later
+sync by any other account is refused with `409 OWNERSHIP_CONFLICT` and writes nothing; the owner
+keeps their access. This is on by default and needs no configuration.
+
+The rule lives in the SQL upsert (`COALESCE(existing, excluded)`) rather than in a read-then-write
+check, so two concurrent syncs cannot both see an unbound row and race to claim it. The service also
+reads the current owner before writing, purely so the caller gets a clear `409` instead of a success
+response describing an entitlement that belongs to somebody else.
+
+Set `STOREKIT_ALLOW_ACCOUNT_TRANSFER=true`, or pass `allowAccountTransfer`, only behind a deliberate
+support flow. It restores the old behaviour, in which whoever posts a transaction takes it.
 
 **Pin `appAccountToken`.** Set it on the iOS `Product.purchase(options:)` call to a UUID your server
-can tie back to the user, and return it as `expectedAppAccountToken` from `authenticate`. Without
-this, a signed transaction captured from one account can be synced onto another.
+can tie back to the user, and return it as `expectedAppAccountToken` from `authenticate`. Sticky
+binding stops a captured transaction from taking an existing entitlement away; `appAccountToken`
+additionally stops it from ever binding to the wrong account in the first place — including the case
+where the attacker syncs _first_. Use both.
 
 **Keep the lookup fallback in mind.** With `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK=true`, a
 signed-but-stale transaction can extend access until its own signed expiry while Apple's API is
@@ -77,7 +95,7 @@ roots, and one the other identity checks above do not depend on.
 The verification chain above is exercised in tests, but not uniformly, and the difference matters
 when you are judging risk.
 
-**Proved in CI:** the claim checks (steps 2 to 9). Apple's real `SignedDataVerifier` runs under
+**Proved in CI:** the claim checks (steps 2 to 10). Apple's real `SignedDataVerifier` runs under
 `Environment.LOCAL_TESTING`, which performs genuine decoding, schema validation and its own bundle
 and environment checks, and the module's identity pinning and entitlement policy run on the result.
 Every Apple constant the policy compares against is asserted equal to the SDK's exported enum.

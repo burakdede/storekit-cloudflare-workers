@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { MockD1Database } from "../helpers/mock-d1"
 import { createStoreKitHandler } from "../../src/router"
-import { StoreKitPersistenceError, StoreKitVerificationError } from "../../src/errors"
+import {
+  StoreKitOwnershipConflictError,
+  StoreKitPersistenceError,
+  StoreKitVerificationError
+} from "../../src/errors"
 import type * as StoreKitService from "../../src/service"
 
 const snapshot = {
@@ -162,6 +166,29 @@ describe("StoreKit drop-in router", () => {
     // The stage still reaches the operator through the log sink.
     expect(events.at(-1)).toMatchObject({
       verificationStage: "submitted_jws_claims"
+    })
+  })
+
+  it("answers 409 when the transaction belongs to a different account", async () => {
+    syncStoreKitTransaction.mockRejectedValueOnce(
+      new StoreKitOwnershipConflictError("original-1", "Sandbox")
+    )
+    const events: Record<string, unknown>[] = []
+
+    const response = await handler({
+      onEvent: (event) => events.push(event)
+    }).fetch(syncRequest({ signedTransactionJWS: validJws }), env())
+    const body = (await response?.json()) as { code: string; message: string }
+
+    // Unlike a verification failure this one is explained: the caller already holds the
+    // transaction, so nothing is disclosed, and a client can only build a recovery flow if it is
+    // told the purchase belongs elsewhere rather than that it failed to verify.
+    expect(response?.status).toBe(409)
+    expect(body.code).toBe("OWNERSHIP_CONFLICT")
+    expect(body.message).toBe("This purchase is already associated with a different account.")
+    expect(events.at(-1)).toMatchObject({
+      event: "storekit_transaction_sync_ownership_conflict",
+      originalTransactionId: "original-1"
     })
   })
 

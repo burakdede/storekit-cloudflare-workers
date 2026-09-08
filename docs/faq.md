@@ -154,9 +154,24 @@ credential you verify: a session token, JWT, or API key. See
 
 ### How do I stop a purchase being replayed onto another account?
 
-Pass `appAccountToken` at purchase in the app and return it as `expectedAppAccountToken` from
-`authenticate`. The transaction is then refused unless Apple's signed token matches the account
-making the request.
+Two things, and the first needs no configuration.
+
+**The binding is sticky.** The first account to sync a transaction owns its entitlement. A sync from
+any other account is refused with `409 OWNERSHIP_CONFLICT` and writes nothing, so the paying customer
+keeps their access even if their signed transaction leaks.
+
+**Pin `appAccountToken`.** Pass it at purchase in the app and return it as `expectedAppAccountToken`
+from `authenticate`. The transaction is then refused unless Apple's signed token matches the account
+making the request. This additionally covers the case sticky binding cannot: an attacker who syncs
+_before_ the real customer ever does.
+
+### A customer changed accounts and cannot restore their purchase. What now?
+
+That is the `409` above doing its job — their purchase is bound to the old account. Move it
+deliberately rather than loosening the rule globally: verify the customer through your own support
+flow, then run the sync once with `allowAccountTransfer: true`. Leaving
+`STOREKIT_ALLOW_ACCOUNT_TRANSFER=true` on permanently means any leaked transaction can take a
+customer's subscription away, which is the behaviour the default exists to prevent.
 
 ### Do I need to protect the notification webhook with a secret?
 

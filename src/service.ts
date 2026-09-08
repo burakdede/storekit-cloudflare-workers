@@ -6,7 +6,7 @@
  * the module through one call per operation.
  */
 import { resolveStoreKitEntitlementCore } from "./entitlement.js"
-import { StoreKitVerificationError } from "./errors.js"
+import { StoreKitOwnershipConflictError, StoreKitVerificationError } from "./errors.js"
 import type { StoreKitEntitlementSnapshot, StoreKitEnv } from "./types.js"
 import {
   lookupStoreKitSubscriptionState,
@@ -19,6 +19,7 @@ import {
 } from "./verification.js"
 import {
   loadStoreKitSubscriptionByInstallation,
+  loadStoreKitSubscriptionOwner,
   persistStoreKitNotification,
   persistStoreKitSubscriptionForInstallation,
   storeKitNotificationExists,
@@ -37,6 +38,14 @@ export interface StoreKitServiceConfig {
    * notification payload alone. Defaults to `true`; see `processStoreKitNotification`.
    */
   reconcileNotificationsWithApple?: boolean
+  /**
+   * Let a sync move an entitlement already bound to another account onto the calling account.
+   *
+   * Defaults to `false`, which refuses with `StoreKitOwnershipConflictError`. Enable it only
+   * behind a deliberate, audited support flow; it is what lets one customer's signed transaction
+   * take another customer's access away.
+   */
+  allowAccountTransfer?: boolean | undefined
   now?: Date
 }
 
@@ -146,11 +155,28 @@ export async function syncStoreKitTransaction(
     config.now,
     config.allowGracePeriodAccess ?? true
   )
+
+  const allowAccountTransfer = config.allowAccountTransfer === true
+  if (snapshot.originalTransactionId && input.installationId && !allowAccountTransfer) {
+    // Refuse before writing, so the caller is never handed a snapshot describing an entitlement
+    // that belongs to somebody else. The sticky binding rule in the upsert is the actual
+    // protection; this read decides what the caller is told.
+    const owner = await loadStoreKitSubscriptionOwner(
+      snapshot.originalTransactionId,
+      snapshot.environment,
+      config.d1
+    )
+    if (owner && owner !== input.installationId) {
+      throw new StoreKitOwnershipConflictError(snapshot.originalTransactionId, snapshot.environment)
+    }
+  }
+
   await persistStoreKitSubscriptionForInstallation(
     snapshot,
     input.installationId,
     input.appBundleId,
-    config.d1
+    config.d1,
+    { allowAccountTransfer }
   )
   return { snapshot, verified }
 }
