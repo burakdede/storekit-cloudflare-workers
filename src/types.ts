@@ -14,6 +14,45 @@ export const STOREKIT_ENVIRONMENT = {
 export type StoreKitEnvironment =
   typeof STOREKIT_ENVIRONMENT.SANDBOX | typeof STOREKIT_ENVIRONMENT.PRODUCTION
 
+/**
+ * Apple's App Store Server Notification V2 types.
+ *
+ * Declared here rather than re-exported from the Apple SDK, so the package's public API does not
+ * leak its dependency, exactly as `STOREKIT_STATUS` does. The conformance suite asserts every value
+ * still equals the SDK's own `NotificationTypeV2`.
+ *
+ * A host switching on `notificationType` should treat the string as open: Apple adds types, and a
+ * payload carrying one this version does not know is still verified and recorded.
+ */
+export const STOREKIT_NOTIFICATION_TYPE = {
+  SUBSCRIBED: "SUBSCRIBED",
+  DID_CHANGE_RENEWAL_PREF: "DID_CHANGE_RENEWAL_PREF",
+  DID_CHANGE_RENEWAL_STATUS: "DID_CHANGE_RENEWAL_STATUS",
+  OFFER_REDEEMED: "OFFER_REDEEMED",
+  DID_RENEW: "DID_RENEW",
+  EXPIRED: "EXPIRED",
+  DID_FAIL_TO_RENEW: "DID_FAIL_TO_RENEW",
+  GRACE_PERIOD_EXPIRED: "GRACE_PERIOD_EXPIRED",
+  PRICE_INCREASE: "PRICE_INCREASE",
+  REFUND: "REFUND",
+  REFUND_DECLINED: "REFUND_DECLINED",
+  CONSUMPTION_REQUEST: "CONSUMPTION_REQUEST",
+  RENEWAL_EXTENDED: "RENEWAL_EXTENDED",
+  REVOKE: "REVOKE",
+  TEST: "TEST",
+  RENEWAL_EXTENSION: "RENEWAL_EXTENSION",
+  REFUND_REVERSED: "REFUND_REVERSED",
+  EXTERNAL_PURCHASE_TOKEN: "EXTERNAL_PURCHASE_TOKEN",
+  ONE_TIME_CHARGE: "ONE_TIME_CHARGE",
+  RESCIND_CONSENT: "RESCIND_CONSENT",
+  METADATA_UPDATE: "METADATA_UPDATE",
+  MIGRATION: "MIGRATION",
+  PRICE_CHANGE: "PRICE_CHANGE"
+} as const
+
+export type StoreKitNotificationType =
+  (typeof STOREKIT_NOTIFICATION_TYPE)[keyof typeof STOREKIT_NOTIFICATION_TYPE]
+
 /** Apple's `status` values from Get All Subscription Statuses. */
 export const STOREKIT_STATUS = {
   ACTIVE: 1,

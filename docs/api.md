@@ -124,6 +124,31 @@ const { snapshot } = await syncStoreKitTransaction(
 | `sandboxAllowed`                  | `boolean?`    | Narrow the allowed environments for this call. |
 | `now`                             | `Date?`       | Inject the clock, for tests.                   |
 
+### Notification types
+
+`STOREKIT_NOTIFICATION_TYPE` carries Apple's 23 App Store Server Notification V2 types, so a host
+switching on one has something to check its cases against:
+
+```ts
+import { STOREKIT_NOTIFICATION_TYPE } from "storekit-cloudflare-workers"
+
+onEntitlementChange: async ({ notification, next }) => {
+  if (notification?.type === STOREKIT_NOTIFICATION_TYPE.CONSUMPTION_REQUEST) {
+    // Apple's window is 12 hours; answer from the webhook, not a nightly batch.
+    await sendStoreKitConsumptionInformation(env, transactionId, consumptionRequest)
+  }
+}
+```
+
+**Treat the string as open.** Apple adds types, and a payload carrying one this version does not know
+is still verified, recorded and projected — it simply will not match a constant. Do not `switch`
+exhaustively without a default.
+
+The constant is declared by this package rather than re-exported from the Apple SDK, so the public
+API does not leak its dependency. A conformance test asserts the set still equals the SDK's own
+`NotificationTypeV2` exactly, in both directions, so an Apple addition or rename fails CI rather than
+silently taking a default branch in a host's handler.
+
 ### `onEntitlementChange`
 
 Storing the entitlement is half an integration; the other half is your application reacting to it.

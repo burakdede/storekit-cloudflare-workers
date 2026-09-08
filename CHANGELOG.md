@@ -105,6 +105,11 @@
 
 ### API
 
+- `STOREKIT_NOTIFICATION_TYPE` and `StoreKitNotificationType` export Apple's 23 notification types, so
+  a host switching on `notificationType` has something to check its cases against. Declared by this
+  package rather than re-exported from the Apple SDK, and pinned against the SDK's `NotificationTypeV2`
+  in both directions by the conformance suite.
+
 - `resolveStoreKitEntitlementCore(input, now?, policy?)` now takes a `StoreKitEntitlementPolicy`
   object. The original `allowGracePeriodAccess` boolean is still accepted in its place, so existing
   calls keep working.

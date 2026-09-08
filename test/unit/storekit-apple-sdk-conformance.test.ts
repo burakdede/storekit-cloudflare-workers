@@ -21,13 +21,14 @@ import {
   Environment,
   ExpirationIntent,
   InAppOwnershipType,
+  NotificationTypeV2,
   OfferDiscountType,
-  TransactionReason,
   OfferType,
   RevocationReason,
   RevocationType,
   SignedDataVerifier,
   Status,
+  TransactionReason,
   Type,
   type JWSRenewalInfoDecodedPayload,
   type JWSTransactionDecodedPayload
@@ -41,7 +42,7 @@ import {
   type StoreKitEntitlementTransaction
 } from "../../src/entitlement"
 import { verifyStoreKitTransactionWithRuntime } from "../../src/verification"
-import { STOREKIT_ENVIRONMENT, STOREKIT_STATUS } from "../../src/types"
+import { STOREKIT_ENVIRONMENT, STOREKIT_NOTIFICATION_TYPE, STOREKIT_STATUS } from "../../src/types"
 import type { StoreKitRuntime } from "../../src/verification"
 
 const BUNDLE_ID = "com.example.app"
@@ -56,6 +57,19 @@ describe("Apple SDK conformance", () => {
       expect(STOREKIT_STATUS.BILLING_RETRY).toBe(Status.BILLING_RETRY)
       expect(STOREKIT_STATUS.BILLING_GRACE_PERIOD).toBe(Status.BILLING_GRACE_PERIOD)
       expect(STOREKIT_STATUS.REVOKED).toBe(Status.REVOKED)
+    })
+
+    // A host switches on these strings. If Apple renames one, or adds one this package does not
+    // know, that must be visible here rather than as a notification silently taking a default
+    // branch in somebody's handler.
+    it("matches Apple's notification types exactly", () => {
+      const ours = Object.values(STOREKIT_NOTIFICATION_TYPE).sort()
+      const apple = Object.values(NotificationTypeV2).sort()
+
+      expect(ours).toEqual(apple)
+      for (const [name, value] of Object.entries(STOREKIT_NOTIFICATION_TYPE)) {
+        expect(value, `${name} should equal its own name`).toBe(name)
+      }
     })
 
     it("matches Apple's environment names", () => {
