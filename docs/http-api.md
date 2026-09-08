@@ -158,8 +158,26 @@ Every failure has the same shape:
 | `400`  | `VALIDATION_ERROR`     | Malformed request, or Apple-signed material that failed verification  |
 | `401`  | `UNAUTHORIZED`         | `authenticate` returned `null`, or a notification failed verification |
 | `405`  | `METHOD_NOT_ALLOWED`   | Wrong method for the path                                             |
+| `409`  | `OWNERSHIP_CONFLICT`   | The transaction's entitlement belongs to a different account          |
 | `503`  | `UPSTREAM_UNAVAILABLE` | Apple credentials are missing, or D1 is temporarily unavailable       |
 | `500`  | `INTERNAL_ERROR`       | Unexpected failure                                                    |
+
+**`409` is the one failure that is explained.** The first account to sync a transaction owns its
+entitlement; a sync from anyone else is refused and writes nothing, so the owner keeps their access.
+The caller already holds the transaction, so saying so discloses nothing they do not have, and it is
+the only response from which a client can build a recovery flow:
+
+```json
+{
+  "code": "OWNERSHIP_CONFLICT",
+  "message": "This purchase is already associated with a different account."
+}
+```
+
+Show it as "this purchase is already in use on another account" and point the customer at support.
+Do not retry: the same request will keep failing. See
+[`STOREKIT_ALLOW_ACCOUNT_TRANSFER`](configuration.md#storekit_allow_account_transfer) for the
+deliberate transfer path.
 
 **Verification failures never explain which check rejected them.** A forged payload and a wrong
 bundle ID produce the same `400`, so probing teaches an attacker nothing. The stage that failed goes

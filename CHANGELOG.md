@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- **An entitlement now stays bound to the first account that syncs it.** The sync upsert resolved
+  `installation_id` with `COALESCE(excluded, existing)`, so any account posting another customer's
+  signed transaction took the entitlement: the row rebound, the original owner's read returned
+  nothing, and the poster's returned `active_paid`. A signed transaction is not a secret — it is held
+  by the client and turns up in logs and support tickets — so possession of one no longer moves an
+  entitlement. A conflicting sync answers `409 OWNERSHIP_CONFLICT` and writes nothing.
+  `expectedAppAccountToken` already covered this, but only for hosts that wired it up and clients
+  that passed a token, so out of the box there was no defence.
+- `STOREKIT_ALLOW_ACCOUNT_TRANSFER` (and the `allowAccountTransfer` option) restores the previous
+  behaviour for the legitimate case of moving a purchase between accounts. It defaults to off; scope
+  it to a single call rather than enabling it deployment-wide.
+- New `StoreKitOwnershipConflictError` and `loadStoreKitSubscriptionOwner` exports.
+
 ## 0.1.0
 
 First release. Server-authoritative StoreKit 2 for Cloudflare Workers and D1.
