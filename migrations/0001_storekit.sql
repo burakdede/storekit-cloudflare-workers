@@ -4,9 +4,8 @@
 --   npx wrangler d1 migrations apply STOREKIT_DB --local
 --   npx wrangler d1 migrations apply STOREKIT_DB --remote
 --
--- This file is kept byte-identical to src/storekit/schema.sql, which is the copy an adopter
--- applies directly when they vendor the module into an existing Worker rather than using this
--- repository's migration directory. A test asserts the two stay in sync.
+-- Later migrations in this directory add columns as Apple's contract grows; Wrangler applies them
+-- in filename order.
 
 -- Current entitlement projection: one row per subscription (or per non-consumable purchase).
 CREATE TABLE IF NOT EXISTS storekit_subscriptions (
