@@ -142,6 +142,12 @@ new cases, or a default.
 
 ### Tooling
 
+- The tarball smoke test now covers the state `init` actually leaves behind. It previously installed
+  into a scratch Worker whose `wrangler.jsonc` already carried the StoreKit variables, so
+  `wrangler types` produced an `Env` that overlapped `StoreKitEnv`. `init` writes the mount point
+  first and prints those variables afterwards, so the real first-run state was never exercised — and
+  that is where the weak-type error above lived. Both states are checked now.
+
 - **The mount point `init` generates now typechecks before the Worker variables are configured.**
   `StoreKitEnv` is all-optional, so TypeScript's weak-type check rejects an adopter `Env` sharing no
   properties with it — which is every `Env` until the StoreKit variables reach `wrangler.jsonc`.
