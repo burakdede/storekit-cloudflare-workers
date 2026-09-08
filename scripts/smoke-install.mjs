@@ -24,7 +24,22 @@ function capture(command, args, cwd) {
 }
 
 const workspace = mkdtempSync(join(tmpdir(), "storekit-smoke-"))
-const consumer = join(workspace, "consumer")
+
+/**
+ * Two shapes of adopter, because the order of `init`'s own instructions creates both.
+ *
+ * `configured` is a project that has already pasted the StoreKit variables into wrangler.jsonc, so
+ * `wrangler types` gives it an `Env` carrying them.
+ *
+ * `first-run` is the state `init` actually leaves behind: it writes the mount point and *then*
+ * prints the variables to add. Until they are added, `Env` shares no properties with the
+ * all-optional `StoreKitEnv`, and TypeScript's weak-type check rejects the assignment. That is a
+ * compile error on generated code, in the first minute of use, and it shipped once already.
+ */
+const CONSUMERS = [
+  { name: "configured", storeKitVars: true },
+  { name: "first-run", storeKitVars: false }
+]
 
 try {
   console.log(`> packing into ${workspace}`)
@@ -35,85 +50,97 @@ try {
       .pop()
   )
 
-  mkdirSync(join(consumer, "src"), { recursive: true })
-  writeFileSync(
-    join(consumer, "package.json"),
-    JSON.stringify({ name: "storekit-smoke-consumer", private: true, type: "module" }, null, 2)
-  )
-  writeFileSync(
-    join(consumer, "tsconfig.json"),
-    JSON.stringify(
-      {
-        compilerOptions: {
-          target: "ES2022",
-          // Node's own resolution, which is stricter than a bundler's: it will not forgive a
-          // missing extension or an export map that does not name its types.
-          module: "nodenext",
-          moduleResolution: "nodenext",
-          strict: true,
-          noEmit: true,
-          skipLibCheck: true
-        },
-        include: ["src", "worker-configuration.d.ts"]
-      },
-      null,
-      2
+  for (const { name, storeKitVars } of CONSUMERS) {
+    const consumer = join(workspace, name)
+    console.log(`\n> consumer: ${name} (StoreKit vars ${storeKitVars ? "set" : "not yet set"})`)
+    mkdirSync(join(consumer, "src"), { recursive: true })
+    writeFileSync(
+      join(consumer, "package.json"),
+      JSON.stringify({ name: "storekit-smoke-consumer", private: true, type: "module" }, null, 2)
     )
-  )
-  writeFileSync(
-    join(consumer, "wrangler.jsonc"),
-    JSON.stringify(
-      {
-        name: "storekit-smoke-consumer",
-        main: "src/storekit.ts",
-        compatibility_date: "2026-08-03",
-        compatibility_flags: ["nodejs_compat"],
-        vars: {
-          STOREKIT_BUNDLE_ID: "com.example.app",
-          STOREKIT_ALLOWED_PRODUCT_IDS: "com.example.pro"
+    writeFileSync(
+      join(consumer, "tsconfig.json"),
+      JSON.stringify(
+        {
+          compilerOptions: {
+            target: "ES2022",
+            // Node's own resolution, which is stricter than a bundler's: it will not forgive a
+            // missing extension or an export map that does not name its types.
+            module: "nodenext",
+            moduleResolution: "nodenext",
+            strict: true,
+            noEmit: true,
+            skipLibCheck: true
+          },
+          include: ["src", "worker-configuration.d.ts"]
         },
-        d1_databases: [
-          {
-            binding: "DB",
-            database_name: "storekit",
-            database_id: "00000000-0000-0000-0000-000000000000",
-            // Deliberately the copy inside node_modules: adopters are told they can skip vendoring
-            // the SQL, so that path has to keep working.
-            migrations_dir: "node_modules/storekit-cloudflare-workers/migrations"
-          }
-        ]
-      },
-      null,
-      2
+        null,
+        2
+      )
     )
-  )
+    writeFileSync(
+      join(consumer, "wrangler.jsonc"),
+      JSON.stringify(
+        {
+          name: "storekit-smoke-consumer",
+          main: "src/storekit.ts",
+          compatibility_date: "2026-08-03",
+          compatibility_flags: ["nodejs_compat"],
+          ...(storeKitVars
+            ? {
+                vars: {
+                  STOREKIT_BUNDLE_ID: "com.example.app",
+                  STOREKIT_ALLOWED_PRODUCT_IDS: "com.example.pro"
+                }
+              }
+            : {}),
+          d1_databases: [
+            {
+              binding: "DB",
+              database_name: "storekit",
+              database_id: "00000000-0000-0000-0000-000000000000",
+              // Deliberately the copy inside node_modules: adopters are told they can skip vendoring
+              // the SQL, so that path has to keep working.
+              migrations_dir: "node_modules/storekit-cloudflare-workers/migrations"
+            }
+          ]
+        },
+        null,
+        2
+      )
+    )
 
-  console.log("> installing the tarball")
-  run("npm", ["install", "--no-audit", "--no-fund", tarball], consumer)
-  run(
-    "npm",
-    ["install", "--no-audit", "--no-fund", "--save-dev", "typescript", "wrangler"],
-    consumer
-  )
+    console.log("> installing the tarball")
+    run("npm", ["install", "--no-audit", "--no-fund", tarball], consumer)
+    run(
+      "npm",
+      ["install", "--no-audit", "--no-fund", "--save-dev", "typescript", "wrangler"],
+      consumer
+    )
 
-  console.log("> npx storekit-cloudflare-workers init")
-  run("npx", ["storekit-cloudflare-workers", "init", "--binding=DB", "--no-migrations"], consumer)
+    console.log("> npx storekit-cloudflare-workers init")
+    run("npx", ["storekit-cloudflare-workers", "init", "--binding=DB", "--no-migrations"], consumer)
 
-  const migrations = readdirSync(
-    join(consumer, "node_modules/storekit-cloudflare-workers/migrations")
-  )
-  if (!migrations.some((name) => name.endsWith(".sql"))) {
-    throw new Error("the tarball ships no D1 migration")
+    const migrations = readdirSync(
+      join(consumer, "node_modules/storekit-cloudflare-workers/migrations")
+    )
+    if (!migrations.some((name) => name.endsWith(".sql"))) {
+      throw new Error("the tarball ships no D1 migration")
+    }
+
+    console.log("> wrangler types")
+    run("npx", ["wrangler", "types"], consumer)
+
+    console.log("> tsc --noEmit (nodenext resolution)")
+    run("npx", ["tsc", "--noEmit"], consumer)
+
+    console.log("> wrangler deploy --dry-run")
+    run(
+      "npx",
+      ["wrangler", "deploy", "--dry-run", `--outdir=${join(workspace, name, "dist")}`],
+      consumer
+    )
   }
-
-  console.log("> wrangler types")
-  run("npx", ["wrangler", "types"], consumer)
-
-  console.log("> tsc --noEmit (nodenext resolution)")
-  run("npx", ["tsc", "--noEmit"], consumer)
-
-  console.log("> wrangler deploy --dry-run")
-  run("npx", ["wrangler", "deploy", "--dry-run", `--outdir=${join(workspace, "dist")}`], consumer)
 
   console.log("\nsmoke install passed")
 } finally {
