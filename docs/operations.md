@@ -160,6 +160,41 @@ npx wrangler d1 execute STOREKIT_DB --remote --command="
 The failing stage is in your `onEvent` sink under `verificationStage`; it is never in the HTTP
 response. Never copy JWS or credential values into logs or tickets.
 
+## Degraded Apple lookups
+
+With `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK=true`, a sync Apple could not be reached for still
+succeeds: the entitlement resolves from the already signature-verified submitted JWS instead. That is
+the intended trade-off, and it is silent — the customer keeps access and the request returns `200`.
+
+The sync event marks it, at `warn` rather than `info`:
+
+```json
+{
+  "event": "storekit_transaction_verified",
+  "appleLookupDegraded": true,
+  "appleLookupFailed": "transaction",
+  "appleHttpStatus": 429
+}
+```
+
+**Alert on `appleLookupDegraded`.** Without it a deployment can serve entirely from the fallback for
+hours with no signal, handing out entitlements only as current as the JWS a client happened to send.
+
+`appleHttpStatus` separates causes that need different responses:
+
+| Status        | Meaning                                                 | What to do                                                                  |
+| ------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `429`         | Apple is rate limiting you                              | Reduce sync frequency; a client syncing on every launch is the usual cause. |
+| `401` / `403` | API key wrong, revoked, or lacking In-App Purchase role | Fix the credential. This will not recover on its own.                       |
+| `5xx`         | Apple incident                                          | Wait, and check Apple's system status.                                      |
+
+`appleLookupFailed` says which call failed, and the blast radius differs. `transaction` means the
+whole entitlement came from the client's JWS. `subscription_status` means the transaction verified
+against Apple but renewal and grace-period state did not, so a grace period may be missed.
+
+Set `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK=false` where a stale grant is worse than a temporary
+denial; syncs then answer `503` instead of degrading.
+
 ## Ownership conflicts
 
 A sync answers `409 OWNERSHIP_CONFLICT` when the transaction's entitlement is already bound to a

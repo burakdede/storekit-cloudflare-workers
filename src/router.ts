@@ -32,7 +32,8 @@ import {
   processStoreKitNotification,
   syncStoreKitTransaction,
   type StoreKitEntitlementChange,
-  type StoreKitServiceConfig
+  type StoreKitServiceConfig,
+  type StoreKitTransactionSyncResult
 } from "./service.js"
 import {
   storeKitAllowAccountTransfer,
@@ -151,6 +152,32 @@ export interface StoreKitHandlerOptions<TEnv extends StoreKitWorkerEnv = StoreKi
 }
 
 /* eslint-enable no-unused-vars */
+
+/**
+ * Describe a sync Apple could not be reached for.
+ *
+ * `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK` lets verification fall back to the submitted JWS when
+ * Apple's API is unavailable. That is a deliberate trade-off, but it is silent: the request
+ * succeeds and the entitlement resolves from claims that may be stale. These fields are what let an
+ * operator see it happening — and tell a rate limit (`429`) apart from an outage, which otherwise
+ * look identical.
+ */
+function appleLookupDegradation(
+  verified: StoreKitTransactionSyncResult["verified"]
+): Record<string, unknown> | null {
+  const diagnostics =
+    verified.transactionLookupDiagnostics ?? verified.subscriptionStatusLookupDiagnostics
+  if (!diagnostics) return null
+  return {
+    appleLookupDegraded: true,
+    appleLookupFailed: verified.transactionLookupDiagnostics
+      ? "transaction"
+      : "subscription_status",
+    appleHttpStatus: diagnostics.appleHttpStatus,
+    appleApiError: diagnostics.appleApiError,
+    appleSdkErrorName: diagnostics.sdkErrorName
+  }
+}
 
 const MAX_JWS_LENGTH = 16_384
 const MAX_NOTIFICATION_LENGTH = 65_536
@@ -350,15 +377,21 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
       },
       serviceConfig(env, context, ctx)
     )
+    // A degraded sync is one Apple could not be reached for, resolved from the already
+    // signature-verified submitted JWS instead. It succeeds, so nothing else marks it, and a
+    // deployment can run entirely on the fallback for hours without a single signal. Reported at
+    // `warn` for that reason.
+    const degradation = appleLookupDegradation(result.verified)
     emit({
-      level: "info",
+      level: degradation ? "warn" : "info",
       event: "storekit_transaction_verified",
       accountId: context.accountId,
       productId: result.snapshot.productId,
       environment: result.snapshot.environment,
       computedStatus: result.snapshot.status,
       proActive: result.snapshot.proActive,
-      verificationSource: result.verified.verificationSource
+      verificationSource: result.verified.verificationSource,
+      ...degradation
     })
     return jsonResponse(result.snapshot, 200)
   }
