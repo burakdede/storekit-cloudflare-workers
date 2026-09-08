@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### Upgrading
+
+**Apply the new migrations.** Five were added; Wrangler runs them in filename order:
+
+```bash
+npx wrangler d1 migrations apply STOREKIT_DB --local
+npx wrangler d1 migrations apply STOREKIT_DB --remote
+```
+
+Every one adds nullable columns to the existing projections. Nothing is rewritten, no row changes
+its entitlement, and the defaults are chosen so pre-existing rows keep behaving exactly as they did —
+a `NULL` `in_app_ownership_type` reads as purchased, a `NULL` `revocation_type` still reports
+`refunded`.
+
+**One behaviour change needs a decision.** A sync for a transaction already bound to a different
+account now answers `409 OWNERSHIP_CONFLICT` and writes nothing, where it previously rebound the
+entitlement. This closes a hole — a leaked signed transaction could take a paying customer's access
+away — but a customer who legitimately changed accounts now needs a deliberate transfer. Clients
+should treat `409` as terminal rather than retrying it. See
+[`STOREKIT_ALLOW_ACCOUNT_TRANSFER`](docs/configuration.md#storekit_allow_account_transfer).
+
+**Three additions are worth wiring up**, none of them required:
+
+- `onEntitlementChange`, to react when a refund, renewal or grace period changes an entitlement.
+- The `entitlements` array on `GET /storekit/entitlement`, if you sell more than one product. The
+  top-level fields are unchanged, so a one-product app needs no change at all.
+- An alert on `appleLookupDegraded`, so a deployment running on the Apple fallback is visible.
+
+**Two new statuses** can appear: `family_revoked` and `upgraded`, plus `family_shared` if you turn
+Family Sharing off. Anything gating on `proActive` is unaffected; a `switch` over `status` needs the
+new cases, or a default.
+
 ### Security
 
 - **An entitlement now stays bound to the first account that syncs it.** The sync upsert resolved
@@ -86,7 +118,6 @@
 - `currency` now falls back to the transaction's when renewal info carries none. Strictly additive:
   values that were `null` may now be populated, and nothing already set changes.
   Migration `0006_commerce_metadata.sql`.
-
 - **Subscription groups are modelled, so an app with more than one product is served correctly.**
   `subscriptionGroupIdentifier` is stored on both projections, and `GET /storekit/entitlement` now
   returns an `entitlements` array with one entry per group alongside the existing top-level fields.
@@ -98,7 +129,6 @@
   one-product integration needs no change. New `listStoreKitEntitlements` and
   `listStoreKitSubscriptionsByInstallation` exports; `StoreKitPreparedStatement` gains `all()`.
   Migration `0005_subscription_group.sql`.
-
 - **`onEntitlementChange` lets a host react to an entitlement changing.** Previously a refund could
   arrive, the projection update, and the application never find out; `onEvent` is a log sink, not a
   change feed. The hook receives the previous projection, the new snapshot, which fields differ, and
@@ -118,7 +148,6 @@
   a host switching on `notificationType` has something to check its cases against. Declared by this
   package rather than re-exported from the Apple SDK, and pinned against the SDK's `NotificationTypeV2`
   in both directions by the conformance suite.
-
 - `resolveStoreKitEntitlementCore(input, now?, policy?)` now takes a `StoreKitEntitlementPolicy`
   object. The original `allowGracePeriodAccess` boolean is still accepted in its place, so existing
   calls keep working.
