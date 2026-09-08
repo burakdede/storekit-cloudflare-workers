@@ -92,4 +92,25 @@ describe("documentation conformance", () => {
       "error codes missing from docs/http-api.md"
     ).toEqual([])
   })
+
+  it("documents every function the package exports", () => {
+    const api = read("docs", "api.md")
+    // A backticked mention counts, with or without a call signature: `storeKitRoutePaths` is a
+    // const and still needs somewhere to be read about.
+    const documented = new Set(
+      [...api.matchAll(/`([A-Za-z_][A-Za-z0-9_]*)[\s(`]/g)].map((match) => match[1]!)
+    )
+    // Value exports are the actionable API: someone finds one in an editor's autocomplete and needs
+    // somewhere to read what it does. Types are covered by the option tables around them, so only
+    // values are required here.
+    const exported = [
+      ...read("src", "index.ts").matchAll(/^ {2}(?!type )([a-z][A-Za-z0-9_]*),$/gm)
+    ].map((match) => match[1]!)
+
+    expect(exported.length).toBeGreaterThan(20)
+    expect(
+      exported.filter((name) => !documented.has(name)),
+      "exported functions missing from docs/api.md"
+    ).toEqual([])
+  })
 })

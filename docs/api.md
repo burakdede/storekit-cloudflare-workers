@@ -242,7 +242,9 @@ Use these when you want verified Apple claims without the persistence or HTTP la
 | `buildStoreKitRuntimes(env)`                                 | One verifier + client per configured environment. Build once, reuse.                                  |
 | `storeKitStatusName(status)`                                 | Apple's numeric status as a readable name, for logs.                                                  |
 
-The `*WithRuntime` variants take a prebuilt `StoreKitRuntime` instead of `env`, which is also the
+`verifyStoreKitTransactionWithRuntime(jws, runtime)` and
+`verifyStoreKitNotificationWithRuntime(payload, runtime)` take a prebuilt `StoreKitRuntime` instead of
+`env`, so a caller verifying many payloads builds the verifier and Apple client once. It is also the
 seam the test suite injects at.
 
 ---
@@ -255,7 +257,9 @@ called anything.
 | Function                                                                                  | Purpose                                                             |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | `persistStoreKitSubscriptionForInstallation(snapshot, accountId, bundleId, db, options?)` | Write the projection and audit row, guarded on Apple's signed date. |
-| `loadStoreKitSubscriptionByInstallation(accountId, now, environments, db)`                | Read one account's row.                                             |
+| `loadStoreKitSubscriptionByInstallation(accountId, now, environments, db)`                | The account's best row.                                             |
+| `listStoreKitSubscriptionsByInstallation(accountId, now, environments, db)`               | One row per subscription group.                                     |
+| `loadStoreKitSubscriptionByTransaction(originalTransactionId, environment, db)`           | The row for one transaction, whoever owns it.                       |
 | `loadStoreKitSubscriptionOwner(originalTransactionId, environment, db)`                   | The account a transaction is bound to, or `null`.                   |
 | `persistStoreKitNotification(notification, db)`                                           | Write the replay ledger entry and projection in one atomic batch.   |
 | `storeKitNotificationExists(uuid, db)`                                                    | Replay check.                                                       |
@@ -273,11 +277,15 @@ Tables: `storekit_subscriptions` (projection), `storekit_transactions` (audit tr
 | ----------------------------------------- | ---------------------------------------------------------------------------- |
 | `describeStoreKitConfig(env)`             | Every problem at once, plus secret **presence** without values. Safe to log. |
 | `assertStoreKitConfig(env)`               | Throws `StoreKitConfigError` if anything is wrong. Good for a startup check. |
-| `storeKitConfiguredEnvironments(env)`     | The allowed Apple environments.                                              |
+| `storeKitConfiguredEnvironments(env)`     | The allowed Apple environments, production first.                            |
+| `storeKitConfiguredEnvironment(env)`      | The primary environment, i.e. the first of the above.                        |
 | `storeKitAllowedProductIds(env)`          | The product allow-list as a `Set`.                                           |
 | `storeKitAllowGracePeriodAccess(env)`     | The effective grace-period policy.                                           |
 | `storeKitReconcileNotifications(env)`     | The effective reconciliation policy.                                         |
 | `storeKitAppleLookupFallbackEnabled(env)` | Whether a failed Apple lookup falls back to signed claims.                   |
+| `storeKitAllowFamilySharing(env)`         | Whether a `FAMILY_SHARED` purchase grants access.                            |
+| `storeKitAllowAccountTransfer(env)`       | Whether a sync may move an entitlement off the account that owns it.         |
+| `storeKitSandboxPreReleaseEnabled(env)`   | Whether sandbox transactions are accepted on this deployment.                |
 | `storeKitAppAppleId(env, environment)`    | The numeric App Store app id Apple requires for production notifications.    |
 | `parseAppleRootCertificatesPem(pem)`      | Apple's roots as DER buffers.                                                |
 
