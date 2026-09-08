@@ -332,6 +332,22 @@ export class MockD1Database {
     return `${hash}:${environment}:${bundleId}`
   }
 
+  /**
+   * Mirror the production upsert's account-binding rule, which the SQL selects between.
+   *
+   * Sticky (the default) keeps whichever account bound the row first. Transfer lets an incoming
+   * non-null account replace it. Hard-coding either one here would let a binding regression pass.
+   */
+  private resolveInstallationBinding(
+    sql: string,
+    table: string,
+    incoming: string | null,
+    existing: string | null | undefined
+  ): string | null {
+    const sticky = sql.includes(`COALESCE(${table}.installation_id, excluded.installation_id)`)
+    return sticky ? (existing ?? incoming ?? null) : (incoming ?? existing ?? null)
+  }
+
   private storeKitSubscriptionKey(originalTransactionId: string, environment: string): string {
     return `${originalTransactionId}:${environment}`
   }
@@ -459,6 +475,12 @@ export class MockD1Database {
     if (sql.includes("FROM mobile_app_attest_keys")) {
       const row = this.mobileAppAttestKeys.get(String(bindings[0]))
       return (row ? this.appAttestKeyResult(row) : null) as T | null
+    }
+    if (sql.includes("WHERE original_transaction_id = ? AND environment = ?")) {
+      const row = this.storeKitSubscriptions.get(
+        this.storeKitSubscriptionKey(String(bindings[0]), String(bindings[1]))
+      )
+      return (row ? { installationId: row.installation_id } : null) as T | null
     }
     if (sql.includes("FROM storekit_subscriptions")) {
       const row = sql.includes("WHERE installation_id = ?")
@@ -669,7 +691,12 @@ export class MockD1Database {
       const row: StoreKitSubscriptionRow = {
         original_transaction_id: String(bindings[0]),
         environment: String(bindings[1]),
-        installation_id: (bindings[2] as string | null) ?? existing?.installation_id ?? null,
+        installation_id: this.resolveInstallationBinding(
+          sql,
+          "storekit_subscriptions",
+          bindings[2] as string | null,
+          existing?.installation_id
+        ),
         app_account_token: (bindings[3] as string | null) ?? existing?.app_account_token ?? null,
         latest_transaction_id: String(bindings[4]),
         app_bundle_id: String(bindings[5]),
@@ -716,7 +743,12 @@ export class MockD1Database {
         original_transaction_id: String(bindings[2]),
         web_order_line_item_id:
           (bindings[3] as string | null) ?? existing?.web_order_line_item_id ?? null,
-        installation_id: (bindings[4] as string | null) ?? existing?.installation_id ?? null,
+        installation_id: this.resolveInstallationBinding(
+          sql,
+          "storekit_transactions",
+          bindings[4] as string | null,
+          existing?.installation_id
+        ),
         app_account_token: (bindings[5] as string | null) ?? existing?.app_account_token ?? null,
         app_bundle_id: String(bindings[6]),
         product_id: String(bindings[7]),

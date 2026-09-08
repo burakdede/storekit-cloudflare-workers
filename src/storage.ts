@@ -134,11 +134,24 @@ function placeholders(count: number): string {
   return new Array(count).fill("?").join(", ")
 }
 
-function subscriptionUpsertStatement(): string {
+/**
+ * How a write is allowed to change the account an entitlement is bound to.
+ *
+ * The default is sticky: the first account to sync a transaction keeps it, and a later sync by
+ * anyone else leaves the binding alone. That rule lives in SQL rather than in a read-then-write
+ * check so two concurrent syncs cannot both observe an unbound row and race to claim it.
+ */
+function installationBindingRule(table: string, allowAccountTransfer: boolean): string {
+  return allowAccountTransfer
+    ? `COALESCE(excluded.installation_id, ${table}.installation_id)`
+    : `COALESCE(${table}.installation_id, excluded.installation_id)`
+}
+
+function subscriptionUpsertStatement(allowAccountTransfer: boolean): string {
   return `INSERT INTO storekit_subscriptions (${SUBSCRIPTION_COLUMNS})
     VALUES (${placeholders(28)})
     ON CONFLICT(original_transaction_id, environment) DO UPDATE SET
-      installation_id = COALESCE(excluded.installation_id, storekit_subscriptions.installation_id),
+      installation_id = ${installationBindingRule("storekit_subscriptions", allowAccountTransfer)},
       app_account_token = COALESCE(excluded.app_account_token, storekit_subscriptions.app_account_token),
       latest_transaction_id = excluded.latest_transaction_id,
       app_bundle_id = excluded.app_bundle_id,
@@ -166,13 +179,13 @@ function subscriptionUpsertStatement(): string {
     ${monotonicWriteGuard("storekit_subscriptions")}`
 }
 
-function transactionUpsertStatement(): string {
+function transactionUpsertStatement(allowAccountTransfer: boolean): string {
   return `INSERT INTO storekit_transactions (${TRANSACTION_COLUMNS})
     VALUES (${placeholders(22)})
     ON CONFLICT(transaction_id, environment) DO UPDATE SET
       original_transaction_id = excluded.original_transaction_id,
       web_order_line_item_id = COALESCE(excluded.web_order_line_item_id, storekit_transactions.web_order_line_item_id),
-      installation_id = COALESCE(excluded.installation_id, storekit_transactions.installation_id),
+      installation_id = ${installationBindingRule("storekit_transactions", allowAccountTransfer)},
       app_account_token = COALESCE(excluded.app_account_token, storekit_transactions.app_account_token),
       app_bundle_id = excluded.app_bundle_id,
       product_id = excluded.product_id,
@@ -282,19 +295,43 @@ function assertPersistableSnapshot(snapshot: StoreKitEntitlementSnapshot): void 
 function snapshotProjectionStatements(
   snapshot: StoreKitEntitlementSnapshot,
   installationId: string | null,
-  appBundleId: string
+  appBundleId: string,
+  allowAccountTransfer: boolean
 ): { statement: string; bindings: unknown[] }[] {
   const nowIso = isoNow()
   return [
     {
-      statement: transactionUpsertStatement(),
+      statement: transactionUpsertStatement(allowAccountTransfer),
       bindings: transactionBindings(snapshot, installationId, appBundleId, nowIso)
     },
     {
-      statement: subscriptionUpsertStatement(),
+      statement: subscriptionUpsertStatement(allowAccountTransfer),
       bindings: subscriptionBindings(snapshot, installationId, appBundleId, nowIso)
     }
   ]
+}
+
+/**
+ * The account a transaction's entitlement is currently bound to, or `null` when it is unbound.
+ *
+ * Callers use this to answer a conflicting sync with a clear error instead of a success response
+ * describing an entitlement the caller does not own. The sticky binding rule in the upsert is what
+ * actually protects the row; this read only decides what the caller is told.
+ */
+export async function loadStoreKitSubscriptionOwner(
+  originalTransactionId: string,
+  environment: string,
+  db: StoreKitDatabase | undefined
+): Promise<string | null> {
+  const row = await storeKitD1First<{ installationId: string | null }>(
+    db,
+    `SELECT installation_id AS installationId
+    FROM storekit_subscriptions
+    WHERE original_transaction_id = ? AND environment = ?`,
+    [originalTransactionId, environment],
+    "storekit_subscription_select_owner"
+  )
+  return row?.installationId ?? null
 }
 
 export async function loadStoreKitSubscriptionByInstallation(
@@ -354,16 +391,31 @@ export async function loadStoreKitSubscriptionByInstallation(
   )
 }
 
+export interface StoreKitPersistOptions {
+  /**
+   * Let this write move an entitlement already bound to another account onto `installationId`.
+   *
+   * Off by default. See `StoreKitOwnershipConflictError`.
+   */
+  allowAccountTransfer?: boolean | undefined
+}
+
 export async function persistStoreKitSubscriptionForInstallation(
   snapshot: StoreKitEntitlementSnapshot,
   installationId: string | null,
   appBundleId: string,
-  db: StoreKitDatabase | undefined
+  db: StoreKitDatabase | undefined,
+  options: StoreKitPersistOptions = {}
 ): Promise<void> {
   assertPersistableSnapshot(snapshot)
   await storeKitD1Batch(
     db,
-    snapshotProjectionStatements(snapshot, installationId, appBundleId),
+    snapshotProjectionStatements(
+      snapshot,
+      installationId,
+      appBundleId,
+      options.allowAccountTransfer === true
+    ),
     "storekit_subscription_and_transaction_upsert"
   )
 }
@@ -441,7 +493,7 @@ export async function persistStoreKitNotification(
   // whatever binding a previous sync established.
   await storeKitD1Batch(
     db,
-    [...snapshotProjectionStatements(snapshot, null, appBundleId), notificationStatement],
+    [...snapshotProjectionStatements(snapshot, null, appBundleId, false), notificationStatement],
     "storekit_notification_and_subscription_upsert"
   )
 }

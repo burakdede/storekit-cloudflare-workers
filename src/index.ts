@@ -15,6 +15,7 @@ export {
   describeStoreKitConfig,
   parseAppleRootCertificatesPem,
   storeKitAllowedProductIds,
+  storeKitAllowAccountTransfer,
   storeKitAllowGracePeriodAccess,
   storeKitAppAppleId,
   storeKitAppleLookupFallbackEnabled,
@@ -27,6 +28,7 @@ export {
 
 export {
   StoreKitConfigError,
+  StoreKitOwnershipConflictError,
   StoreKitPersistenceError,
   StoreKitVerificationError,
   type StoreKitVerificationDiagnostics
@@ -70,11 +72,13 @@ export {
 
 export {
   loadStoreKitSubscriptionByInstallation,
+  loadStoreKitSubscriptionOwner,
   persistStoreKitNotification,
   persistStoreKitSubscriptionForInstallation,
   storeKitNotificationExists,
   storeKitNotificationStatement,
   type StoreKitDatabase,
+  type StoreKitPersistOptions,
   type StoreKitSubscriptionRecord
 } from "./storage.js"
 

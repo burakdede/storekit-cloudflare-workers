@@ -76,3 +76,23 @@ export class StoreKitPersistenceError extends Error {
     this.retryable = retryable
   }
 }
+
+/**
+ * A verified transaction is already bound to a different account.
+ *
+ * A signed JWS is not a secret: the client holds it, and it travels through logs, support tickets
+ * and screenshots. Possession of one therefore proves a purchase happened, not who owns it, so a
+ * sync that would move an existing entitlement onto the posting account is refused rather than
+ * applied. Hosts opt into transfer explicitly when a customer genuinely needs to move a purchase.
+ */
+export class StoreKitOwnershipConflictError extends Error {
+  readonly originalTransactionId: string
+  readonly environment: string
+
+  constructor(originalTransactionId: string, environment: string) {
+    super("StoreKit transaction is already bound to a different account.")
+    this.name = "StoreKitOwnershipConflictError"
+    this.originalTransactionId = originalTransactionId
+    this.environment = environment
+  }
+}
