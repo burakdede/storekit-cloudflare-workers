@@ -81,6 +81,18 @@ new cases, or a default.
 
 ### Testing
 
+- **An end-to-end test drives a customer's whole lifecycle through the composed stack**: real HTTP
+  into the mounted handler, real ES256 signatures verified against a real certificate chain, the real
+  policy, and real SQLite behind the real migrations. Purchase, read-back, a refund revoking access,
+  notification replay, a forged chain rejected, and a second account refused.
+- Writing it surfaced that `vi.mock` cannot intercept a module's calls to itself, so an earlier draft
+  ran against Apple's real network, silently degraded through
+  `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK`, and passed for the wrong reason. The suite disables that
+  fallback so an unreachable Apple fails loudly rather than looking like success.
+- **`runtimes` lets a host supply a prebuilt Apple verifier and client.** `buildStoreKitRuntimes` was
+  documented as "build once, reuse", but the module rebuilt one on every sync and every notification
+  and offered no way to pass one in. Defaults to the previous behaviour.
+
 - **Signature and certificate chain verification is now actually tested.** `src/verification.ts` was
   wrapped end to end in a `v8 ignore` block, reporting 100% coverage while executing none of its
   logic, and the conformance suite deliberately ran under `Environment.LOCAL_TESTING`, which skips

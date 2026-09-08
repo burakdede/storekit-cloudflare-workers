@@ -44,6 +44,7 @@ import {
 } from "./config.js"
 import type { StoreKitDatabase } from "./storage.js"
 import type { StoreKitEnv } from "./types.js"
+import type { StoreKitRuntimeSource } from "./verification.js"
 
 /**
  * The minimum a Worker environment must provide: the StoreKit variables.
@@ -148,6 +149,14 @@ export interface StoreKitHandlerOptions<TEnv extends StoreKitWorkerEnv = StoreKi
    * to awaiting when none was passed.
    */
   entitlementChangeMode?: "await" | "waitUntil" | undefined
+  /**
+   * Prebuilt Apple runtimes, so the isolate builds the verifier and Apple client once rather than
+   * on every request. Defaults to building them from `env`.
+   *
+   *     const runtimes = buildStoreKitRuntimes(env)   // once, at module scope
+   *     createStoreKitHandler({ authenticate, runtimes: () => runtimes })
+   */
+  runtimes?: StoreKitRuntimeSource | undefined
   onEvent?: StoreKitEventSink | undefined
 }
 
@@ -332,6 +341,7 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
         options.reconcileNotificationsWithApple ?? storeKitReconcileNotifications(env),
       allowAccountTransfer: options.allowAccountTransfer ?? storeKitAllowAccountTransfer(env)
     }
+    if (options.runtimes) config.runtimes = options.runtimes
     const hook = options.onEntitlementChange
     if (hook) {
       config.onEntitlementChange =

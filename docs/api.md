@@ -65,6 +65,7 @@ export default {
 | `reconcileNotificationsWithApple` | `boolean`                                                      | `STOREKIT_RECONCILE_NOTIFICATIONS`, itself `true`   | Re-read Apple's status per notification.                                |
 | `allowAccountTransfer`            | `boolean`                                                      | `STOREKIT_ALLOW_ACCOUNT_TRANSFER`, itself `false`   | Let a sync take an entitlement off the account that owns it.            |
 | `allowFamilySharing`              | `boolean`                                                      | `STOREKIT_ALLOW_FAMILY_SHARING`, itself `true`      | Whether a `FAMILY_SHARED` purchase grants access.                       |
+| `runtimes`                        | `StoreKitRuntime[] \| (() => StoreKitRuntime[])`               | built from `env` per request                        | Prebuilt Apple verifier and client. See below.                          |
 | `onEntitlementChange`             | `(change: StoreKitEntitlementChange) => void \| Promise<void>` | —                                                   | Fires when a write actually changed the entitlement. See below.         |
 | `entitlementChangeMode`           | `"await" \| "waitUntil"`                                       | `"await"`                                           | `waitUntil` responds without waiting for the hook.                      |
 | `onEvent`                         | `(event: Record<string, unknown>) => void`                     | —                                                   | Structured logs. No secrets, payloads, or tokens are ever passed to it. |
@@ -123,6 +124,34 @@ const { snapshot } = await syncStoreKitTransaction(
 | `allowFamilySharing`              | `boolean?`    | Defaults to the Worker variable, itself on.    |
 | `sandboxAllowed`                  | `boolean?`    | Narrow the allowed environments for this call. |
 | `now`                             | `Date?`       | Inject the clock, for tests.                   |
+
+### Reusing the Apple runtime
+
+Each verification builds a `SignedDataVerifier` and an `AppStoreServerAPIClient`, which means parsing
+the root certificate bundle out of your PEM secret. By default that happens per request.
+
+A Worker isolate can do it once:
+
+```ts
+import { buildStoreKitRuntimes, createStoreKitWorker } from "storekit-cloudflare-workers"
+
+// Module scope, so it survives across requests in the same isolate.
+let runtimes: Promise<StoreKitRuntime[]> | undefined
+
+export default createStoreKitWorker<Env>({
+  authenticate,
+  // The callback receives `env`, because bindings only exist per request — there is nothing to
+  // build from at module scope.
+  runtimes: (env) => (runtimes ??= buildStoreKitRuntimes(env))
+})
+```
+
+Cache it against the isolate, not across configuration changes: a runtime pins the bundle id,
+environment, product allow-list and credentials it was built with, so a cache outliving a
+`wrangler.jsonc` change would keep verifying against the old values.
+
+This is also the seam the end-to-end tests use — supplying a runtime whose Apple client is controlled
+while its verifier stays genuine.
 
 ### Notification types
 
