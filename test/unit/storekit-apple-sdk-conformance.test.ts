@@ -22,6 +22,7 @@ import {
   ExpirationIntent,
   InAppOwnershipType,
   OfferDiscountType,
+  TransactionReason,
   OfferType,
   RevocationReason,
   RevocationType,
@@ -140,6 +141,18 @@ describe("Apple SDK conformance", () => {
 
       expect(familyRevoke.status).toBe("family_revoked")
       expect(refund.status).toBe("refunded")
+    })
+
+    it("carries Apple's offer and transaction-reason enums through unchanged", () => {
+      const snapshot = resolveStoreKitEntitlementCore(
+        entitlementInput({
+          offerType: OfferType.WIN_BACK_OFFER,
+          transactionReason: TransactionReason.RENEWAL
+        })
+      )
+
+      expect(snapshot.offerType).toBe(OfferType.WIN_BACK_OFFER)
+      expect(snapshot.transactionReason).toBe(TransactionReason.RENEWAL)
     })
 
     it("stores Apple's revocation reason as-is", () => {

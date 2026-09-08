@@ -46,7 +46,7 @@ It covers three things.
 cannot catch a literal that stops matching Apple's enum, because both sides remain ordinary strings
 and numbers. Each literal is therefore asserted equal to the SDK's own exported enum
 (`OfferDiscountType`, `Type`, `OfferType`, `Status`, `Environment`, `RevocationReason`,
-`AutoRenewStatus`, `ExpirationIntent`, `InAppOwnershipType`, `RevocationType`). Without this, an SDK bump could misclassify every trial as
+`AutoRenewStatus`, `ExpirationIntent`, `InAppOwnershipType`, `RevocationType`, `TransactionReason`). Without this, an SDK bump could misclassify every trial as
 paid, or revoke every non-consumable, with a green test suite.
 
 **Shape drift.** Type-level assignments prove Apple's `JWSTransactionDecodedPayload` and

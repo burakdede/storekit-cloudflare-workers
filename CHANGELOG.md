@@ -63,6 +63,21 @@
 
 ### Integration surface
 
+- **Commerce and renewal metadata Apple signs is no longer discarded.** `price`, `currency`,
+  `storefront`, `storefrontId`, `transactionReason`, `quantity`, `offerType`, `offerIdentifier`,
+  `offerPeriod`, `originalPurchaseDate`, `appTransactionId`, `renewalDate`,
+  `recentSubscriptionStartDate` and `eligibleWinBackOfferIds` are on the snapshot and the
+  projections. None of it gates access; all of it is needed to build the screens and reports around
+  access.
+- `renewalDate` is what a UI should show. It cannot be derived from `expiresAt`, which during a
+  billing grace period is already in the past — exactly when a customer looks.
+- `price` and `renewalPrice` are in **milliunits**: `9990` is 9.99. The unit is repeated at every
+  point it appears, because reading it as currency units is a thousand-fold error that looks
+  plausible in test data.
+- `currency` now falls back to the transaction's when renewal info carries none. Strictly additive:
+  values that were `null` may now be populated, and nothing already set changes.
+  Migration `0006_commerce_metadata.sql`.
+
 - **Subscription groups are modelled, so an app with more than one product is served correctly.**
   `subscriptionGroupIdentifier` is stored on both projections, and `GET /storekit/entitlement` now
   returns an `entitlements` array with one entry per group alongside the existing top-level fields.
