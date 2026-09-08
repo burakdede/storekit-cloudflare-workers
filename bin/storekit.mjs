@@ -6,7 +6,7 @@
  * the package cannot supply, and prints the exact Wrangler configuration and secret commands. It
  * never edits an existing file.
  */
-import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -16,11 +16,20 @@ const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const argv = process.argv.slice(2)
 const command = argv[0] ?? "help"
 
+/**
+ * Read `--name=value`, `--name value`, or bare `--name`.
+ *
+ * The space-separated form matters: `--dir build` previously matched the bare case and returned
+ * `true`, so the CLI resolved its target to a directory literally named "true" and wrote the
+ * migrations there. Silent, and in the wrong place.
+ */
 function flag(name, fallback = undefined) {
-  const hit = argv.find((entry) => entry === `--${name}` || entry.startsWith(`--${name}=`))
-  if (!hit) return fallback
-  const [, value] = hit.split("=")
-  return value ?? true
+  const index = argv.findIndex((entry) => entry === `--${name}` || entry.startsWith(`--${name}=`))
+  if (index === -1) return fallback
+  const entry = argv[index]
+  if (entry.startsWith(`--${name}=`)) return entry.slice(name.length + 3)
+  const next = argv[index + 1]
+  return next !== undefined && !next.startsWith("--") ? next : true
 }
 
 function log(message = "") {
@@ -47,9 +56,7 @@ function copyMigrations(targetDir) {
   return written
 }
 
-const MOUNT_SOURCE = `import { createStoreKitWorker, type StoreKitRequestContext } from "${PACKAGE_NAME}"
-
-/**
+const AUTHENTICATE_SOURCE = `/**
  * The one piece the package cannot supply.
  *
  * A StoreKit transaction proves *that a purchase happened*, never *who it belongs to*; only this
@@ -71,10 +78,33 @@ async function authenticate(request: Request, env: Env): Promise<StoreKitRequest
   //     expectedAppAccountToken: session.appAccountToken
   //   }
   return null
-}
+}`
+
+/** For a Worker that is StoreKit and nothing else: one default export, no routing code. */
+const WORKER_SOURCE = `import { createStoreKitWorker, type StoreKitRequestContext } from "${PACKAGE_NAME}"
+
+${AUTHENTICATE_SOURCE}
 
 export default createStoreKitWorker<Env>({
   authenticate,
+  database: (env) => env.__BINDING__
+})
+`
+
+/**
+ * For a Worker that already exists.
+ *
+ * Exports a handler rather than a default export, because the host already has one. `fetch`
+ * resolves to null for paths this package does not own, so it drops in front of whatever routing
+ * is already there.
+ */
+const HANDLER_SOURCE = `import { createStoreKitHandler, type StoreKitRequestContext } from "${PACKAGE_NAME}"
+
+${AUTHENTICATE_SOURCE}
+
+export const storekit = createStoreKitHandler<Env>({
+  authenticate,
+  // Point this at whatever your D1 binding is called.
   database: (env) => env.__BINDING__
 })
 `
@@ -101,33 +131,71 @@ function wranglerSnippet(binding, migrationsDir) {
 }`
 }
 
+/**
+ * Does this project already have a Worker?
+ *
+ * If it does, generating a second default export and telling the adopter to repoint `main` would
+ * replace their application. Detection reads Wrangler's `main`, then falls back to the conventional
+ * entrypoints, and can always be overridden with `--mode`.
+ */
+function detectExistingWorker(targetRoot) {
+  for (const name of ["wrangler.jsonc", "wrangler.json", "wrangler.toml"]) {
+    const config = join(targetRoot, name)
+    if (!existsSync(config)) continue
+    const main = /["']?main["']?\s*[:=]\s*["']([^"']+)["']/.exec(readFileSync(config, "utf8"))
+    if (main?.[1] && existsSync(join(targetRoot, main[1]))) {
+      return { entrypoint: main[1], via: name }
+    }
+  }
+  for (const candidate of ["src/index.ts", "src/index.js", "src/worker.ts", "src/worker.js"]) {
+    if (existsSync(join(targetRoot, candidate))) return { entrypoint: candidate, via: "convention" }
+  }
+  return null
+}
+
 function init() {
   const targetRoot = resolve(String(flag("dir", ".")))
   const binding = String(flag("binding", "STOREKIT_DB"))
   const migrationsDir = String(flag("migrations-dir", "migrations"))
-  const mountPath = join(targetRoot, String(flag("mount", "src/storekit.ts")))
 
+  const existing = detectExistingWorker(targetRoot)
+  const requestedMode = flag("mode")
+  if (requestedMode !== undefined && requestedMode !== "worker" && requestedMode !== "handler") {
+    log(`Unknown --mode ${requestedMode}. Expected "worker" or "handler".`)
+    process.exitCode = 1
+    return
+  }
+  const mode = requestedMode ?? (existing ? "handler" : "worker")
+
+  const mountPath = join(targetRoot, String(flag("mount", "src/storekit.ts")))
   const copied = flag("no-migrations") ? [] : copyMigrations(resolve(targetRoot, migrationsDir))
 
   let mountWritten = false
   if (!existsSync(mountPath)) {
     mkdirSync(dirname(mountPath), { recursive: true })
-    writeFileSync(mountPath, MOUNT_SOURCE.replaceAll("__BINDING__", binding))
+    const template = mode === "handler" ? HANDLER_SOURCE : WORKER_SOURCE
+    writeFileSync(mountPath, template.replaceAll("__BINDING__", binding))
     mountWritten = true
   }
 
+  const mountName = relative(targetRoot, mountPath) || mountPath
+  const importPath = `./${mountName.replace(/^src\//, "").replace(/\.tsx?$/, "")}`
+
   log(`${PACKAGE_NAME} init`)
   log()
+  if (existing && requestedMode === undefined) {
+    log(`  detected   ${existing.entrypoint} (${existing.via}); generating a mountable handler`)
+  } else if (mode === "handler") {
+    log(`  mode       handler`)
+  } else {
+    log(`  mode       worker (no existing entrypoint found)`)
+  }
   log(
     copied.length
       ? `  wrote      ${copied.map((name) => join(migrationsDir, name)).join(", ")}`
       : `  migrations already present in ${migrationsDir}/`
   )
-  log(
-    mountWritten
-      ? `  wrote      ${relative(targetRoot, mountPath) || mountPath}`
-      : `  kept       ${relative(targetRoot, mountPath) || mountPath} (already exists)`
-  )
+  log(mountWritten ? `  wrote      ${mountName}` : `  kept       ${mountName} (already exists)`)
   log()
   log("Add to wrangler.jsonc:")
   log()
@@ -150,8 +218,27 @@ function init() {
     log(`  npx wrangler secret put ${secret}`)
   }
   log()
-  log(`Then point your Worker's main at the file above, implement authenticate(), and set Apple's`)
-  log(`App Store Server Notifications V2 URL to https://<your-worker>/storekit/notifications.`)
+
+  if (mode === "handler") {
+    log(
+      `Mount it in ${existing ? existing.entrypoint : "your Worker"}. \`fetch\` resolves to null for`
+    )
+    log(`paths this package does not own, so it composes with whatever routing you already have:`)
+    log()
+    log(`  import { storekit } from "${importPath}"`)
+    log()
+    log(`  export default {`)
+    log(`    async fetch(request, env, ctx) {`)
+    log(`      return (await storekit.fetch(request, env, ctx)) ?? myRoutes(request, env, ctx)`)
+    log(`    }`)
+    log(`  }`)
+  } else {
+    log(`Then point your Worker's main at ${mountName}.`)
+  }
+  log()
+  log(`Implement authenticate() in ${mountName} — until you do, every authenticated route answers`)
+  log(`401 — and set Apple's App Store Server Notifications V2 URL to`)
+  log(`https://<your-worker>/storekit/notifications.`)
 }
 
 function migrations() {
@@ -169,8 +256,11 @@ switch (command) {
     log(`${PACKAGE_NAME}
 
   init [--dir .] [--binding STOREKIT_DB] [--migrations-dir migrations]
-       [--mount src/storekit.ts] [--no-migrations]
-       Copy the D1 migration, write a mount point, and print the Wrangler configuration.
+       [--mount src/storekit.ts] [--mode worker|handler] [--no-migrations]
+       Copy the D1 migrations, write a mount point, and print the Wrangler configuration.
+
+       An existing Worker is detected and gets a mountable handler; a project with no
+       entrypoint gets a complete Worker. Override with --mode.
 
   migrations-dir
        Print the path of the migration directory inside node_modules, for use as
