@@ -14,6 +14,7 @@ export interface StoreKitSubscriptionRecord {
   environment: string
   installationId: string | null
   appAccountToken: string | null
+  inAppOwnershipType: string | null
   latestTransactionId: string
   productId: string
   status: string
@@ -119,14 +120,14 @@ function monotonicWriteGuard(table: string): string {
 }
 
 const SUBSCRIPTION_COLUMNS = `original_transaction_id, environment, installation_id, app_account_token,
-  latest_transaction_id, app_bundle_id, product_id, status, expires_at, access_expires_at,
+  in_app_ownership_type, latest_transaction_id, app_bundle_id, product_id, status, expires_at, access_expires_at,
   perpetual, grace_period_expires_at, is_trial, revocation_date, revocation_reason, product_type,
   offer_discount_type, latest_signed_date, auto_renew_status, auto_renew_product_id,
   expiration_intent, is_in_billing_retry, price_increase_status, renewal_price, currency,
   last_verified_at, created_at, updated_at`
 
 const TRANSACTION_COLUMNS = `transaction_id, environment, original_transaction_id, web_order_line_item_id,
-  installation_id, app_account_token, app_bundle_id, product_id, purchase_date, expires_at,
+  installation_id, app_account_token, in_app_ownership_type, app_bundle_id, product_id, purchase_date, expires_at,
   access_expires_at, perpetual, revocation_date, revocation_reason, status, pro_active, source,
   product_type, offer_discount_type, latest_signed_date, first_seen_at, last_seen_at`
 
@@ -149,10 +150,11 @@ function installationBindingRule(table: string, allowAccountTransfer: boolean): 
 
 function subscriptionUpsertStatement(allowAccountTransfer: boolean): string {
   return `INSERT INTO storekit_subscriptions (${SUBSCRIPTION_COLUMNS})
-    VALUES (${placeholders(28)})
+    VALUES (${placeholders(29)})
     ON CONFLICT(original_transaction_id, environment) DO UPDATE SET
       installation_id = ${installationBindingRule("storekit_subscriptions", allowAccountTransfer)},
       app_account_token = COALESCE(excluded.app_account_token, storekit_subscriptions.app_account_token),
+      in_app_ownership_type = COALESCE(excluded.in_app_ownership_type, storekit_subscriptions.in_app_ownership_type),
       latest_transaction_id = excluded.latest_transaction_id,
       app_bundle_id = excluded.app_bundle_id,
       product_id = excluded.product_id,
@@ -181,12 +183,13 @@ function subscriptionUpsertStatement(allowAccountTransfer: boolean): string {
 
 function transactionUpsertStatement(allowAccountTransfer: boolean): string {
   return `INSERT INTO storekit_transactions (${TRANSACTION_COLUMNS})
-    VALUES (${placeholders(22)})
+    VALUES (${placeholders(23)})
     ON CONFLICT(transaction_id, environment) DO UPDATE SET
       original_transaction_id = excluded.original_transaction_id,
       web_order_line_item_id = COALESCE(excluded.web_order_line_item_id, storekit_transactions.web_order_line_item_id),
       installation_id = ${installationBindingRule("storekit_transactions", allowAccountTransfer)},
       app_account_token = COALESCE(excluded.app_account_token, storekit_transactions.app_account_token),
+      in_app_ownership_type = COALESCE(excluded.in_app_ownership_type, storekit_transactions.in_app_ownership_type),
       app_bundle_id = excluded.app_bundle_id,
       product_id = excluded.product_id,
       purchase_date = COALESCE(excluded.purchase_date, storekit_transactions.purchase_date),
@@ -216,6 +219,7 @@ function subscriptionBindings(
     snapshot.environment,
     installationId,
     snapshot.appAccountToken,
+    snapshot.inAppOwnershipType,
     snapshot.latestTransactionId,
     appBundleId,
     snapshot.productId,
@@ -256,6 +260,7 @@ function transactionBindings(
     snapshot.webOrderLineItemId,
     installationId,
     snapshot.appAccountToken,
+    snapshot.inAppOwnershipType,
     appBundleId,
     snapshot.productId,
     snapshot.purchaseDate,
@@ -349,6 +354,7 @@ export async function loadStoreKitSubscriptionByInstallation(
       environment,
       installation_id AS installationId,
       app_account_token AS appAccountToken,
+      in_app_ownership_type AS inAppOwnershipType,
       latest_transaction_id AS latestTransactionId,
       product_id AS productId,
       status,

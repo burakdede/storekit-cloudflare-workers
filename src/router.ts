@@ -34,6 +34,7 @@ import {
 } from "./service.js"
 import {
   storeKitAllowAccountTransfer,
+  storeKitAllowFamilySharing,
   storeKitAllowGracePeriodAccess,
   storeKitConfiguredEnvironments,
   storeKitReconcileNotifications
@@ -109,6 +110,11 @@ export interface StoreKitHandlerOptions<TEnv extends StoreKitWorkerEnv = StoreKi
    * intent). Setting it here overrides the variable.
    */
   allowGracePeriodAccess?: boolean | undefined
+  /**
+   * Whether a `FAMILY_SHARED` purchase grants access. Defaults to the
+   * `STOREKIT_ALLOW_FAMILY_SHARING` variable, which itself defaults to `true` (Apple's intent).
+   */
+  allowFamilySharing?: boolean | undefined
   /**
    * Re-read Apple's status on each notification. Defaults to the
    * `STOREKIT_RECONCILE_NOTIFICATIONS` variable, which itself defaults to `true`.
@@ -262,6 +268,7 @@ export function createStoreKitHandler<TEnv extends StoreKitWorkerEnv = StoreKitW
       apple: env,
       d1: resolveDatabase(env) as StoreKitDatabase,
       allowGracePeriodAccess: options.allowGracePeriodAccess ?? storeKitAllowGracePeriodAccess(env),
+      allowFamilySharing: options.allowFamilySharing ?? storeKitAllowFamilySharing(env),
       reconcileNotificationsWithApple:
         options.reconcileNotificationsWithApple ?? storeKitReconcileNotifications(env),
       allowAccountTransfer: options.allowAccountTransfer ?? storeKitAllowAccountTransfer(env)

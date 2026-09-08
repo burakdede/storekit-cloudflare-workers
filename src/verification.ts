@@ -21,7 +21,10 @@ import {
   storeKitAppleLookupFallbackEnabled,
   storeKitConfiguredEnvironments
 } from "./config.js"
-import { resolveStoreKitEntitlementCore } from "./entitlement.js"
+import {
+  resolveStoreKitEntitlementCore,
+  type StoreKitEntitlementPolicy
+} from "./entitlement.js"
 import {
   StoreKitConfigError,
   StoreKitVerificationError,
@@ -723,7 +726,7 @@ export function storeKitStatusName(status: number | undefined): string {
 export function resolveStoreKitEntitlement(
   verified: VerifiedStoreKitTransaction,
   now = new Date(),
-  allowGracePeriodAccess = true
+  policy: boolean | StoreKitEntitlementPolicy = {}
 ): StoreKitEntitlementSnapshot {
   const latestRenewalInfo = verified.subscriptionTransactions.find(
     (candidate) => candidate.renewalInfo
@@ -744,6 +747,6 @@ export function resolveStoreKitEntitlement(
         verified.verificationSource === "apple_lookup" ? "apple_transaction_lookup" : "posted_jws"
     },
     now,
-    allowGracePeriodAccess
+    policy
   )
 }

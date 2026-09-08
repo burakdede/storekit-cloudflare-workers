@@ -16,6 +16,7 @@ export {
   parseAppleRootCertificatesPem,
   storeKitAllowedProductIds,
   storeKitAllowAccountTransfer,
+  storeKitAllowFamilySharing,
   storeKitAllowGracePeriodAccess,
   storeKitAppAppleId,
   storeKitAppleLookupFallbackEnabled,
@@ -49,6 +50,7 @@ export {
   resolveStoreKitEntitlementCore as resolveStoreKitEntitlementPolicy,
   type StoreKitEntitlementCandidate,
   type StoreKitEntitlementInput,
+  type StoreKitEntitlementPolicy,
   type StoreKitEntitlementRenewalInfo,
   type StoreKitEntitlementTransaction
 } from "./entitlement.js"
