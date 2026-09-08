@@ -1,6 +1,6 @@
 {
   "name": "storekit-cloudflare-workers",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Server-side Apple StoreKit 2 subscription validation and entitlements for Cloudflare Workers and D1. Verifies Apple-signed JWS transactions against the App Store Server API, resolves trials, billing grace periods, refunds and lifetime unlocks, and handles App Store Server Notifications V2 idempotently.",
   "keywords": [
     "storekit",

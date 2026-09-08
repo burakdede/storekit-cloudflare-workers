@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-09-09
+
+A correctness and security release. One live defect is fixed, five gaps in Apple's contract are
+closed, and signature verification is tested for the first time. Every schema change is additive, so
+an existing deployment upgrades without any entitlement changing.
 
 ### Upgrading
 
@@ -142,19 +146,17 @@ new cases, or a default.
 
 ### Tooling
 
-- The tarball smoke test now covers the state `init` actually leaves behind. It previously installed
-  into a scratch Worker whose `wrangler.jsonc` already carried the StoreKit variables, so
-  `wrangler types` produced an `Env` that overlapped `StoreKitEnv`. `init` writes the mount point
-  first and prints those variables afterwards, so the real first-run state was never exercised — and
-  that is where the weak-type error above lived. Both states are checked now.
-
 - **The mount point `init` generates now typechecks before the Worker variables are configured.**
   `StoreKitEnv` is all-optional, so TypeScript's weak-type check rejects an adopter `Env` sharing no
   properties with it — which is every `Env` until the StoreKit variables reach `wrangler.jsonc`.
   Since `init` writes the mount file first and prints the variables to paste in afterwards, the very
   first typecheck after `init` failed on generated code. Both templates now use
   `Env & StoreKitWorkerEnv`.
-
+- The tarball smoke test now covers the state `init` actually leaves behind. It previously installed
+  into a scratch Worker whose `wrangler.jsonc` already carried the StoreKit variables, so
+  `wrangler types` produced an `Env` that overlapped `StoreKitEnv`. `init` writes the mount point
+  first and prints those variables afterwards, so the real first-run state was never exercised — and
+  that is where the weak-type error above lived. Both states are checked now.
 - **`init` no longer tells an existing project to replace its Worker.** It generated a
   `createStoreKitWorker` default export and printed "point your Worker's main at the file above" —
   which, followed literally in a project that already had a Worker, swaps out the whole application.
