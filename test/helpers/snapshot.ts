@@ -27,6 +27,7 @@ const DEFAULT_SNAPSHOT: StoreKitEntitlementSnapshot = {
   revocationPercentage: null,
   appAccountToken: null,
   inAppOwnershipType: "PURCHASED",
+  isUpgraded: false,
   productType: "Auto-Renewable Subscription",
   offerDiscountType: null,
   signedDate: "2026-06-02T12:00:00.000Z",

@@ -55,6 +55,8 @@ export type StoreKitEntitlementStatus =
   | "expired"
   | "revoked"
   | "refunded"
+  /** Superseded by an upgrade. The replacement transaction carries the live entitlement. */
+  | "upgraded"
   /** Family Sharing access ended. Nobody was refunded; the organiser's subscription is unaffected. */
   | "family_revoked"
   /** A `FAMILY_SHARED` purchase excluded by policy. Only ever set when family sharing is off. */
@@ -112,6 +114,13 @@ export interface StoreKitEntitlementSnapshot {
    * so it is reported rather than filtered, and `proActive` still respects it by default.
    */
   inAppOwnershipType: string | null
+  /**
+   * True when Apple cancelled this subscription to move the customer to another one.
+   *
+   * A superseded transaction never grants access: its replacement does. Kept on the snapshot and
+   * in the audit projection because the upgrade history is worth having.
+   */
+  isUpgraded: boolean
   productType: string | null
   offerDiscountType: string | null
   /** Apple's signing time for the material behind this snapshot; the out-of-order write guard. */

@@ -36,6 +36,8 @@ export interface StoreKitEntitlementTransaction {
   offerDiscountType?: string | undefined
   signedDate?: number | undefined
   type?: string | undefined
+  /** True once the customer moved to another subscription; Apple cancelled this one to do it. */
+  isUpgraded?: boolean | undefined
   /** `PURCHASED` or `FAMILY_SHARED`. Absent on transactions signed before Apple added it. */
   inAppOwnershipType?: string | undefined
 }
@@ -209,6 +211,10 @@ function isCandidateActive(
   const { transaction, status, renewalInfo } = candidate
   if (!isValidEntitlementProduct(transaction)) return false
   if (transaction.revocationDate) return false
+  // Apple sets `isUpgraded` when it cancelled this subscription to move the customer to another
+  // one. The replacement is the live entitlement, so a superseded transaction must never win
+  // selection and report the product the customer upgraded away from.
+  if (transaction.isUpgraded) return false
   if (!policy.allowFamilySharing && isFamilyShared(transaction)) return false
   if (status === STATUS.EXPIRED || status === STATUS.REVOKED) return false
   if (status === STATUS.BILLING_RETRY) return false
@@ -288,6 +294,7 @@ function baseSnapshot(
     revocationPercentage: transaction.revocationPercentage ?? null,
     appAccountToken: transaction.appAccountToken ?? null,
     inAppOwnershipType: transaction.inAppOwnershipType ?? null,
+    isUpgraded: transaction.isUpgraded ?? false,
     productType: transaction.type ?? null,
     offerDiscountType: transaction.offerDiscountType ?? null,
     signedDate: isoFromAppleMillis(transaction.signedDate ?? renewalInfo?.signedDate),
@@ -347,6 +354,12 @@ export function resolveStoreKitEntitlementCore(
   }
   if (status === STATUS.REVOKED) {
     return baseSnapshot(candidate, input.environment, "revoked", false, now)
+  }
+  // Reached only when every candidate was superseded, which means this view is stale rather than
+  // that the customer churned. Saying `upgraded` rather than `expired` points whoever is reading
+  // at the replacement transaction.
+  if (transaction.isUpgraded) {
+    return baseSnapshot(candidate, input.environment, "upgraded", false, now)
   }
   // Resolved before the status branches because the exclusion is a property of who owns the
   // purchase, not of how it is currently billing: a family-shared subscription in a grace period

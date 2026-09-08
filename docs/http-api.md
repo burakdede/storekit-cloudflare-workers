@@ -63,6 +63,7 @@ The full entitlement snapshot, resolved from verified claims only:
   "revocationPercentage": null,
   "appAccountToken": "6a3f1c5e-6a3f-4c5e-8a3f-1c5e6a3f1c5e",
   "inAppOwnershipType": "PURCHASED",
+  "isUpgraded": false,
   "productType": "Auto-Renewable Subscription",
   "offerDiscountType": null,
   "signedDate": "2026-08-21T10:04:13.000Z",
@@ -226,6 +227,7 @@ Structured events carry no secrets, no signed payloads, and no bearer tokens. Se
 | `purchaseDate`           | ISO string / null | Original purchase time.                                                                                |
 | `revocationDate`         | ISO string / null | Set on a refund or family-sharing revocation. Terminal.                                                |
 | `revocationReason`       | 0/1 / null        | `1` = refunded for an app issue, `0` = other.                                                          |
+| `isUpgraded`             | boolean           | Apple cancelled this subscription to move the customer to another one.                                 |
 | `productType`            | string / null     | Apple's type, e.g. `Auto-Renewable Subscription`, `Non-Consumable`.                                    |
 | `offerDiscountType`      | string / null     | `FREE_TRIAL`, `PAY_AS_YOU_GO`, `PAY_UP_FRONT`.                                                         |
 | `signedDate`             | ISO string / null | Apple's signing time, which is the out-of-order write guard.                                           |

@@ -38,6 +38,14 @@
   both projections. All three still deny access, so no entitlement decision changes.
 - A revocation Apple sent without a type, and every row written before this change, continues to
   report `refunded`. Migration `0003_revocation_detail.sql` adds the columns.
+- **Upgraded subscriptions no longer win entitlement selection.** Apple marks the subscription it
+  cancelled to perform an upgrade with `isUpgraded`, and the policy did not read it. Ranking
+  candidates by expiry alone can therefore pick a superseded monthly transaction over the annual one
+  that replaced it, reporting the product the customer upgraded away from — with access working and
+  only the tier wrong. Superseded transactions are now excluded from selection, kept in the audit
+  projection, and reported through `isUpgraded` on the snapshot.
+- A superseded transaction standing alone resolves to the new `upgraded` status rather than
+  `expired`, since the customer did not churn. Migration `0004_is_upgraded.sql` adds the column.
 
 ### API
 
