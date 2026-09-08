@@ -169,6 +169,72 @@ describe("StoreKit drop-in router", () => {
     })
   })
 
+  it("reports a sync that fell back because Apple was unreachable", async () => {
+    syncStoreKitTransaction.mockResolvedValueOnce({
+      snapshot,
+      verified: {
+        verificationSource: "submitted_jws",
+        transactionLookupDiagnostics: { appleHttpStatus: 429, sdkErrorName: "APIException" }
+      }
+    })
+    const events: Record<string, unknown>[] = []
+
+    const response = await handler({ onEvent: (event) => events.push(event) }).fetch(
+      syncRequest({ signedTransactionJWS: validJws }),
+      env()
+    )
+
+    // The request succeeded, so nothing else marks it. Without this a deployment can serve entirely
+    // from the fallback for hours with no signal at all.
+    expect(response?.status).toBe(200)
+    expect(events.at(-1)).toMatchObject({
+      level: "warn",
+      appleLookupDegraded: true,
+      appleLookupFailed: "transaction",
+      appleHttpStatus: 429
+    })
+  })
+
+  it("does not mark a healthy sync as degraded", async () => {
+    syncStoreKitTransaction.mockResolvedValueOnce({
+      snapshot,
+      verified: { verificationSource: "apple_lookup" }
+    })
+    const events: Record<string, unknown>[] = []
+
+    await handler({ onEvent: (event) => events.push(event) }).fetch(
+      syncRequest({ signedTransactionJWS: validJws }),
+      env()
+    )
+
+    expect(events.at(-1)).toMatchObject({ level: "info" })
+    expect(events.at(-1)).not.toHaveProperty("appleLookupDegraded")
+  })
+
+  it("distinguishes a failed status lookup from a failed transaction lookup", async () => {
+    syncStoreKitTransaction.mockResolvedValueOnce({
+      snapshot,
+      verified: {
+        verificationSource: "apple_lookup",
+        subscriptionStatusLookupDiagnostics: { appleHttpStatus: 503 }
+      }
+    })
+    const events: Record<string, unknown>[] = []
+
+    await handler({ onEvent: (event) => events.push(event) }).fetch(
+      syncRequest({ signedTransactionJWS: validJws }),
+      env()
+    )
+
+    // Different blast radius: the transaction verified against Apple, but renewal and grace-period
+    // state came from the payload alone.
+    expect(events.at(-1)).toMatchObject({
+      appleLookupDegraded: true,
+      appleLookupFailed: "subscription_status",
+      appleHttpStatus: 503
+    })
+  })
+
   it("answers 409 when the transaction belongs to a different account", async () => {
     syncStoreKitTransaction.mockRejectedValueOnce(
       new StoreKitOwnershipConflictError("original-1", "Sandbox")

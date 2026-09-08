@@ -61,6 +61,15 @@
 - The `v8 ignore` block is narrowed to the client construction that genuinely needs real App Store
   Connect credentials, so `verification.ts` now reports honest coverage.
 
+### Observability
+
+- **A sync that fell back because Apple was unreachable is now visible.** With
+  `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK` on, such a sync succeeds and the entitlement resolves from
+  the submitted JWS, so nothing marked it — a deployment could serve entirely from the fallback for
+  hours without a signal. The sync event is raised to `warn` and carries `appleLookupDegraded`,
+  `appleLookupFailed` (which call failed, since the blast radius differs) and Apple's HTTP status,
+  which separates a rate limit from a bad credential from an Apple incident.
+
 ### Integration surface
 
 - **Commerce and renewal metadata Apple signs is no longer discarded.** `price`, `currency`,

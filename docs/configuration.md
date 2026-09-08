@@ -102,7 +102,10 @@ it already checked.
   temporary denial.
 
 Either way the choice never weakens signature verification, and the source used is reported to your
-event sink.
+event sink. When a sync does fall back, the event is raised to `warn` and carries
+`appleLookupDegraded`, `appleLookupFailed` and Apple's HTTP status — alert on it, or a deployment can
+serve from the fallback for hours unnoticed. See
+[operations.md](operations.md#degraded-apple-lookups).
 
 ## `STOREKIT_ALLOW_FAMILY_SHARING`
 
