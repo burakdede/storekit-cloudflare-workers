@@ -78,6 +78,8 @@ type StoreKitSubscriptionRow = {
   is_trial: number
   revocation_date: string | null
   revocation_reason: number | null
+  revocation_type: string | null
+  revocation_percentage: number | null
   product_type: string | null
   offer_discount_type: string | null
   latest_signed_date: string | null
@@ -120,6 +122,8 @@ type StoreKitTransactionRow = {
   perpetual: number
   revocation_date: string | null
   revocation_reason: number | null
+  revocation_type: string | null
+  revocation_percentage: number | null
   status: string
   pro_active: number
   source: string
@@ -239,6 +243,8 @@ export class MockD1Database {
       | "perpetual"
       | "grace_period_expires_at"
       | "revocation_reason"
+      | "revocation_type"
+      | "revocation_percentage"
       | "product_type"
       | "offer_discount_type"
       | "latest_signed_date"
@@ -258,6 +264,8 @@ export class MockD1Database {
       perpetual: 0,
       grace_period_expires_at: null,
       revocation_reason: null,
+      revocation_type: null,
+      revocation_percentage: null,
       product_type: null,
       offer_discount_type: null,
       latest_signed_date: null,
@@ -749,6 +757,8 @@ export class MockD1Database {
         is_trial: Number(values.is_trial),
         revocation_date: revocationDate,
         revocation_reason: (values.revocation_reason as number | null) ?? null,
+        revocation_type: (values.revocation_type as string | null) ?? null,
+        revocation_percentage: (values.revocation_percentage as number | null) ?? null,
         product_type: keep(values.product_type as string | null, existing?.product_type),
         offer_discount_type: keep(
           values.offer_discount_type as string | null,
@@ -827,6 +837,8 @@ export class MockD1Database {
         perpetual: Number(values.perpetual),
         revocation_date: revocationDate,
         revocation_reason: (values.revocation_reason as number | null) ?? null,
+        revocation_type: (values.revocation_type as string | null) ?? null,
+        revocation_percentage: (values.revocation_percentage as number | null) ?? null,
         status: String(values.status),
         pro_active: Number(values.pro_active),
         source: String(values.source),
@@ -1099,6 +1111,8 @@ export class MockD1Database {
       isTrial: row.is_trial,
       revocationDate: row.revocation_date,
       revocationReason: row.revocation_reason,
+      revocationType: row.revocation_type,
+      revocationPercentage: row.revocation_percentage,
       productType: row.product_type,
       offerDiscountType: row.offer_discount_type,
       latestSignedDate: row.latest_signed_date,

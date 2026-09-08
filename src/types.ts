@@ -55,6 +55,8 @@ export type StoreKitEntitlementStatus =
   | "expired"
   | "revoked"
   | "refunded"
+  /** Family Sharing access ended. Nobody was refunded; the organiser's subscription is unaffected. */
+  | "family_revoked"
   /** A `FAMILY_SHARED` purchase excluded by policy. Only ever set when family sharing is off. */
   | "family_shared"
   | "unknown"
@@ -93,6 +95,15 @@ export interface StoreKitEntitlementSnapshot {
   purchaseDate: string | null
   revocationDate: string | null
   revocationReason: number | null
+  /**
+   * `REFUND_FULL`, `REFUND_PRORATED` or `FAMILY_REVOKE`, or `null` on older signed material.
+   *
+   * All three end access to this transaction. The distinction is for reporting: only the two
+   * refund types involve money moving.
+   */
+  revocationType: string | null
+  /** The proportion of the transaction revoked, in **milliunits**. `100000` is 100%. */
+  revocationPercentage: number | null
   appAccountToken: string | null
   /**
    * `PURCHASED` or `FAMILY_SHARED`, or `null` on material signed before Apple added the field.

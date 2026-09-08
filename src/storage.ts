@@ -25,6 +25,8 @@ export interface StoreKitSubscriptionRecord {
   isTrial: boolean | number
   revocationDate: string | null
   revocationReason: number | null
+  revocationType: string | null
+  revocationPercentage: number | null
   productType: string | null
   offerDiscountType: string | null
   latestSignedDate: string | null
@@ -121,14 +123,16 @@ function monotonicWriteGuard(table: string): string {
 
 const SUBSCRIPTION_COLUMNS = `original_transaction_id, environment, installation_id, app_account_token,
   in_app_ownership_type, latest_transaction_id, app_bundle_id, product_id, status, expires_at, access_expires_at,
-  perpetual, grace_period_expires_at, is_trial, revocation_date, revocation_reason, product_type,
+  perpetual, grace_period_expires_at, is_trial, revocation_date, revocation_reason,
+  revocation_type, revocation_percentage, product_type,
   offer_discount_type, latest_signed_date, auto_renew_status, auto_renew_product_id,
   expiration_intent, is_in_billing_retry, price_increase_status, renewal_price, currency,
   last_verified_at, created_at, updated_at`
 
 const TRANSACTION_COLUMNS = `transaction_id, environment, original_transaction_id, web_order_line_item_id,
   installation_id, app_account_token, in_app_ownership_type, app_bundle_id, product_id, purchase_date, expires_at,
-  access_expires_at, perpetual, revocation_date, revocation_reason, status, pro_active, source,
+  access_expires_at, perpetual, revocation_date, revocation_reason, revocation_type,
+  revocation_percentage, status, pro_active, source,
   product_type, offer_discount_type, latest_signed_date, first_seen_at, last_seen_at`
 
 function placeholders(count: number): string {
@@ -150,7 +154,7 @@ function installationBindingRule(table: string, allowAccountTransfer: boolean): 
 
 function subscriptionUpsertStatement(allowAccountTransfer: boolean): string {
   return `INSERT INTO storekit_subscriptions (${SUBSCRIPTION_COLUMNS})
-    VALUES (${placeholders(29)})
+    VALUES (${placeholders(31)})
     ON CONFLICT(original_transaction_id, environment) DO UPDATE SET
       installation_id = ${installationBindingRule("storekit_subscriptions", allowAccountTransfer)},
       app_account_token = COALESCE(excluded.app_account_token, storekit_subscriptions.app_account_token),
@@ -166,6 +170,8 @@ function subscriptionUpsertStatement(allowAccountTransfer: boolean): string {
       is_trial = excluded.is_trial,
       revocation_date = excluded.revocation_date,
       revocation_reason = excluded.revocation_reason,
+      revocation_type = excluded.revocation_type,
+      revocation_percentage = excluded.revocation_percentage,
       product_type = COALESCE(excluded.product_type, storekit_subscriptions.product_type),
       offer_discount_type = COALESCE(excluded.offer_discount_type, storekit_subscriptions.offer_discount_type),
       latest_signed_date = COALESCE(excluded.latest_signed_date, storekit_subscriptions.latest_signed_date),
@@ -183,7 +189,7 @@ function subscriptionUpsertStatement(allowAccountTransfer: boolean): string {
 
 function transactionUpsertStatement(allowAccountTransfer: boolean): string {
   return `INSERT INTO storekit_transactions (${TRANSACTION_COLUMNS})
-    VALUES (${placeholders(23)})
+    VALUES (${placeholders(25)})
     ON CONFLICT(transaction_id, environment) DO UPDATE SET
       original_transaction_id = excluded.original_transaction_id,
       web_order_line_item_id = COALESCE(excluded.web_order_line_item_id, storekit_transactions.web_order_line_item_id),
@@ -198,6 +204,8 @@ function transactionUpsertStatement(allowAccountTransfer: boolean): string {
       perpetual = excluded.perpetual,
       revocation_date = excluded.revocation_date,
       revocation_reason = excluded.revocation_reason,
+      revocation_type = excluded.revocation_type,
+      revocation_percentage = excluded.revocation_percentage,
       status = excluded.status,
       pro_active = excluded.pro_active,
       source = excluded.source,
@@ -231,6 +239,8 @@ function subscriptionBindings(
     snapshot.isTrial ? 1 : 0,
     snapshot.revocationDate,
     snapshot.revocationReason,
+    snapshot.revocationType,
+    snapshot.revocationPercentage,
     snapshot.productType,
     snapshot.offerDiscountType,
     snapshot.signedDate,
@@ -269,6 +279,8 @@ function transactionBindings(
     snapshot.perpetual ? 1 : 0,
     snapshot.revocationDate,
     snapshot.revocationReason,
+    snapshot.revocationType,
+    snapshot.revocationPercentage,
     snapshot.status,
     snapshot.proActive ? 1 : 0,
     snapshot.source,
@@ -365,6 +377,8 @@ export async function loadStoreKitSubscriptionByInstallation(
       is_trial AS isTrial,
       revocation_date AS revocationDate,
       revocation_reason AS revocationReason,
+      revocation_type AS revocationType,
+      revocation_percentage AS revocationPercentage,
       product_type AS productType,
       offer_discount_type AS offerDiscountType,
       latest_signed_date AS latestSignedDate,

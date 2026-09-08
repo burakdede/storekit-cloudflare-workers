@@ -16,15 +16,16 @@ these documents when Apple changes notification fields or API behavior:
 
 ## Fields this module depends on
 
-| Apple field                             | Why it matters here                                                    |
-| --------------------------------------- | ---------------------------------------------------------------------- |
-| `status` (subscription)                 | 1 active, 2 expired, 3 billing retry, 4 grace period, 5 revoked        |
-| `gracePeriodExpiresDate` (renewal info) | The real access deadline during status 4; `expiresDate` has passed     |
-| `offerDiscountType` (transaction)       | Distinguishes a free trial from a paid introductory offer              |
-| `revocationDate` / `revocationReason`   | Refunds and family-sharing revocations; terminal                       |
-| `signedDate`                            | Apple's signing time, used to order out-of-order notification delivery |
-| `type`                                  | Identifies a non-consumable, which never expires                       |
-| `inAppOwnershipType` (transaction)      | `PURCHASED` vs `FAMILY_SHARED`; drives the family-sharing policy       |
+| Apple field                               | Why it matters here                                                    |
+| ----------------------------------------- | ---------------------------------------------------------------------- |
+| `status` (subscription)                   | 1 active, 2 expired, 3 billing retry, 4 grace period, 5 revoked        |
+| `gracePeriodExpiresDate` (renewal info)   | The real access deadline during status 4; `expiresDate` has passed     |
+| `offerDiscountType` (transaction)         | Distinguishes a free trial from a paid introductory offer              |
+| `revocationDate` / `revocationReason`     | Refunds and family-sharing revocations; terminal                       |
+| `revocationType` / `revocationPercentage` | Separates a refund from a family revoke; the proportion, in milliunits |
+| `signedDate`                              | Apple's signing time, used to order out-of-order notification delivery |
+| `type`                                    | Identifies a non-consumable, which never expires                       |
+| `inAppOwnershipType` (transaction)        | `PURCHASED` vs `FAMILY_SHARED`; drives the family-sharing policy       |
 
 The service intentionally treats Apple-signed data as authoritative only after signature, bundle,
 environment, product, and transaction identity validation. It does not implement legacy receipt or
@@ -45,7 +46,7 @@ It covers three things.
 cannot catch a literal that stops matching Apple's enum, because both sides remain ordinary strings
 and numbers. Each literal is therefore asserted equal to the SDK's own exported enum
 (`OfferDiscountType`, `Type`, `OfferType`, `Status`, `Environment`, `RevocationReason`,
-`AutoRenewStatus`, `ExpirationIntent`, `InAppOwnershipType`). Without this, an SDK bump could misclassify every trial as
+`AutoRenewStatus`, `ExpirationIntent`, `InAppOwnershipType`, `RevocationType`). Without this, an SDK bump could misclassify every trial as
 paid, or revoke every non-consumable, with a green test suite.
 
 **Shape drift.** Type-level assignments prove Apple's `JWSTransactionDecodedPayload` and
