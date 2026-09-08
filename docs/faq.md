@@ -117,6 +117,21 @@ and the organiser's subscription is meanwhile alive and still being paid for.
 
 `revocationPercentage` is in **milliunits**: `100000` is 100%, `40000` is 40%.
 
+### A customer upgraded their subscription. Why would the server report the old product?
+
+It will not, and `isUpgraded` is why. Apple cancels the old subscription to move a customer onto the
+new one and marks the cancelled transaction `isUpgraded: true`. A superseded transaction is excluded
+from entitlement selection, so the replacement is what gets reported.
+
+This matters because ranking candidates by expiry alone can pick the wrong one: an upgraded monthly
+transaction can carry a later `expiresDate` than the annual subscription that replaced it. The
+failure is quiet — access works, and only the product name is wrong — which is why it survives
+testing.
+
+If a superseded transaction is the only one available, the status is `upgraded` rather than
+`expired`. The customer did not churn; the view is stale, and the replacement is what to go and look
+for.
+
 ### What happens when notifications arrive out of order?
 
 Writes are guarded on Apple's **signing time**, not your server clock. A `DID_RENEW` that Apple

@@ -94,6 +94,30 @@ describe("StoreKit D1 adapter", () => {
     ).toMatchObject({ revocationType: "REFUND_PRORATED", revocationPercentage: 40_000 })
   })
 
+  it("round-trips the upgrade marker through both projections", async () => {
+    const db = new MockD1Database()
+
+    await persistStoreKitSubscriptionForInstallation(
+      entitlementSnapshot({ proActive: false, status: "upgraded", isUpgraded: true }),
+      "installation-1",
+      "com.example.app",
+      env(db)
+    )
+
+    // Kept in the audit trail as well as the projection: the upgrade history is worth having, it
+    // just must not be what the entitlement is read from.
+    expect(db.getStoreKitSubscriptionRows()[0]).toMatchObject({ is_upgraded: 1 })
+    expect(db.getStoreKitTransactionRows()[0]).toMatchObject({ is_upgraded: 1 })
+    expect(
+      await loadStoreKitSubscriptionByInstallation(
+        "installation-1",
+        new Date("2026-06-03T12:00:00.000Z"),
+        ["Sandbox"],
+        env(db)
+      )
+    ).toMatchObject({ isUpgraded: 1 })
+  })
+
   it("records transaction-less notifications without creating entitlement state", async () => {
     const db = new MockD1Database()
 

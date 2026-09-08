@@ -80,6 +80,7 @@ type StoreKitSubscriptionRow = {
   revocation_reason: number | null
   revocation_type: string | null
   revocation_percentage: number | null
+  is_upgraded: number
   product_type: string | null
   offer_discount_type: string | null
   latest_signed_date: string | null
@@ -124,6 +125,7 @@ type StoreKitTransactionRow = {
   revocation_reason: number | null
   revocation_type: string | null
   revocation_percentage: number | null
+  is_upgraded: number
   status: string
   pro_active: number
   source: string
@@ -245,6 +247,7 @@ export class MockD1Database {
       | "revocation_reason"
       | "revocation_type"
       | "revocation_percentage"
+      | "is_upgraded"
       | "product_type"
       | "offer_discount_type"
       | "latest_signed_date"
@@ -266,6 +269,7 @@ export class MockD1Database {
       revocation_reason: null,
       revocation_type: null,
       revocation_percentage: null,
+      is_upgraded: 0,
       product_type: null,
       offer_discount_type: null,
       latest_signed_date: null,
@@ -759,6 +763,7 @@ export class MockD1Database {
         revocation_reason: (values.revocation_reason as number | null) ?? null,
         revocation_type: (values.revocation_type as string | null) ?? null,
         revocation_percentage: (values.revocation_percentage as number | null) ?? null,
+        is_upgraded: Number(values.is_upgraded),
         product_type: keep(values.product_type as string | null, existing?.product_type),
         offer_discount_type: keep(
           values.offer_discount_type as string | null,
@@ -842,6 +847,7 @@ export class MockD1Database {
         status: String(values.status),
         pro_active: Number(values.pro_active),
         source: String(values.source),
+        is_upgraded: Number(values.is_upgraded),
         product_type: keep(values.product_type as string | null, existing?.product_type),
         offer_discount_type: keep(
           values.offer_discount_type as string | null,
@@ -1113,6 +1119,7 @@ export class MockD1Database {
       revocationReason: row.revocation_reason,
       revocationType: row.revocation_type,
       revocationPercentage: row.revocation_percentage,
+      isUpgraded: row.is_upgraded,
       productType: row.product_type,
       offerDiscountType: row.offer_discount_type,
       latestSignedDate: row.latest_signed_date,
