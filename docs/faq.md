@@ -72,6 +72,22 @@ Or run `npx storekit-cloudflare-workers init` to copy it into your own `migratio
 
 ## Behaviour
 
+### How do I show "renews on 3 March", or report revenue?
+
+`renewalDate` and `price`.
+
+**Use `renewalDate`, not `expiresAt`.** During a billing grace period `expiresAt` is already in the
+past — which is exactly when a customer opens the subscription screen to find out what is going on.
+
+**`price` and `renewalPrice` are in milliunits.** `9990` means 9.99. Treating them as currency units
+is a thousand-fold error that looks entirely plausible in test data. `currency` is the ISO 4217 code
+for both.
+
+`transactionReason` separates a customer's own purchase (`PURCHASE`) from a system renewal
+(`RENEWAL`), which is the difference between a new subscriber and a retained one in a funnel.
+`offerType` and `offerIdentifier` attribute a conversion to the offer that caused it, and
+`eligibleWinBackOfferIds` is what makes win-back offers reachable from the server at all.
+
 ### What is the difference between `expiresAt` and `accessExpiresAt`?
 
 `expiresAt` is the subscription's own expiry. `accessExpiresAt` is when access actually lapses:

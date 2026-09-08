@@ -31,6 +31,20 @@ export interface StoreKitSubscriptionRecord {
   isUpgraded: boolean | number
   productType: string | null
   offerDiscountType: string | null
+  offerType: number | null
+  offerIdentifier: string | null
+  offerPeriod: string | null
+  price: number | null
+  storefront: string | null
+  storefrontId: string | null
+  transactionReason: string | null
+  quantity: number | null
+  originalPurchaseDate: string | null
+  appTransactionId: string | null
+  renewalDate: string | null
+  recentSubscriptionStartDate: string | null
+  /** Stored as a JSON array; `null` when Apple sent none. */
+  eligibleWinBackOfferIds: string | null
   latestSignedDate: string | null
   autoRenewStatus: number | null
   autoRenewProductId: string | null
@@ -148,7 +162,10 @@ const SUBSCRIPTION_COLUMNS = `original_transaction_id, environment, installation
   in_app_ownership_type, subscription_group_identifier, latest_transaction_id, app_bundle_id, product_id, status, expires_at, access_expires_at,
   perpetual, grace_period_expires_at, is_trial, revocation_date, revocation_reason,
   revocation_type, revocation_percentage, is_upgraded, product_type,
-  offer_discount_type, latest_signed_date, auto_renew_status, auto_renew_product_id,
+  offer_discount_type, offer_type, offer_identifier, offer_period, price, storefront,
+  storefront_id, transaction_reason, quantity, original_purchase_date, app_transaction_id,
+  renewal_date, recent_subscription_start_date, eligible_win_back_offer_ids,
+  latest_signed_date, auto_renew_status, auto_renew_product_id,
   expiration_intent, is_in_billing_retry, price_increase_status, renewal_price, currency,
   last_verified_at, created_at, updated_at`
 
@@ -156,7 +173,9 @@ const TRANSACTION_COLUMNS = `transaction_id, environment, original_transaction_i
   installation_id, app_account_token, in_app_ownership_type, subscription_group_identifier, app_bundle_id, product_id, purchase_date, expires_at,
   access_expires_at, perpetual, revocation_date, revocation_reason, revocation_type,
   revocation_percentage, status, pro_active, source, is_upgraded,
-  product_type, offer_discount_type, latest_signed_date, first_seen_at, last_seen_at`
+  product_type, offer_discount_type, offer_type, offer_identifier, offer_period, price,
+  storefront, storefront_id, transaction_reason, quantity, original_purchase_date,
+  app_transaction_id, latest_signed_date, first_seen_at, last_seen_at`
 
 function placeholders(count: number): string {
   return new Array(count).fill("?").join(", ")
@@ -177,7 +196,7 @@ function installationBindingRule(table: string, allowAccountTransfer: boolean): 
 
 function subscriptionUpsertStatement(allowAccountTransfer: boolean): string {
   return `INSERT INTO storekit_subscriptions (${SUBSCRIPTION_COLUMNS})
-    VALUES (${placeholders(33)})
+    VALUES (${placeholders(46)})
     ON CONFLICT(original_transaction_id, environment) DO UPDATE SET
       installation_id = ${installationBindingRule("storekit_subscriptions", allowAccountTransfer)},
       app_account_token = COALESCE(excluded.app_account_token, storekit_subscriptions.app_account_token),
@@ -199,6 +218,19 @@ function subscriptionUpsertStatement(allowAccountTransfer: boolean): string {
       is_upgraded = excluded.is_upgraded,
       product_type = COALESCE(excluded.product_type, storekit_subscriptions.product_type),
       offer_discount_type = COALESCE(excluded.offer_discount_type, storekit_subscriptions.offer_discount_type),
+      offer_type = COALESCE(excluded.offer_type, storekit_subscriptions.offer_type),
+      offer_identifier = COALESCE(excluded.offer_identifier, storekit_subscriptions.offer_identifier),
+      offer_period = COALESCE(excluded.offer_period, storekit_subscriptions.offer_period),
+      price = COALESCE(excluded.price, storekit_subscriptions.price),
+      storefront = COALESCE(excluded.storefront, storekit_subscriptions.storefront),
+      storefront_id = COALESCE(excluded.storefront_id, storekit_subscriptions.storefront_id),
+      transaction_reason = COALESCE(excluded.transaction_reason, storekit_subscriptions.transaction_reason),
+      quantity = COALESCE(excluded.quantity, storekit_subscriptions.quantity),
+      original_purchase_date = COALESCE(excluded.original_purchase_date, storekit_subscriptions.original_purchase_date),
+      app_transaction_id = COALESCE(excluded.app_transaction_id, storekit_subscriptions.app_transaction_id),
+      renewal_date = excluded.renewal_date,
+      recent_subscription_start_date = COALESCE(excluded.recent_subscription_start_date, storekit_subscriptions.recent_subscription_start_date),
+      eligible_win_back_offer_ids = excluded.eligible_win_back_offer_ids,
       latest_signed_date = COALESCE(excluded.latest_signed_date, storekit_subscriptions.latest_signed_date),
       auto_renew_status = COALESCE(excluded.auto_renew_status, storekit_subscriptions.auto_renew_status),
       auto_renew_product_id = COALESCE(excluded.auto_renew_product_id, storekit_subscriptions.auto_renew_product_id),
@@ -214,7 +246,7 @@ function subscriptionUpsertStatement(allowAccountTransfer: boolean): string {
 
 function transactionUpsertStatement(allowAccountTransfer: boolean): string {
   return `INSERT INTO storekit_transactions (${TRANSACTION_COLUMNS})
-    VALUES (${placeholders(27)})
+    VALUES (${placeholders(37)})
     ON CONFLICT(transaction_id, environment) DO UPDATE SET
       original_transaction_id = excluded.original_transaction_id,
       web_order_line_item_id = COALESCE(excluded.web_order_line_item_id, storekit_transactions.web_order_line_item_id),
@@ -238,6 +270,16 @@ function transactionUpsertStatement(allowAccountTransfer: boolean): string {
       is_upgraded = excluded.is_upgraded,
       product_type = COALESCE(excluded.product_type, storekit_transactions.product_type),
       offer_discount_type = COALESCE(excluded.offer_discount_type, storekit_transactions.offer_discount_type),
+      offer_type = COALESCE(excluded.offer_type, storekit_transactions.offer_type),
+      offer_identifier = COALESCE(excluded.offer_identifier, storekit_transactions.offer_identifier),
+      offer_period = COALESCE(excluded.offer_period, storekit_transactions.offer_period),
+      price = COALESCE(excluded.price, storekit_transactions.price),
+      storefront = COALESCE(excluded.storefront, storekit_transactions.storefront),
+      storefront_id = COALESCE(excluded.storefront_id, storekit_transactions.storefront_id),
+      transaction_reason = COALESCE(excluded.transaction_reason, storekit_transactions.transaction_reason),
+      quantity = COALESCE(excluded.quantity, storekit_transactions.quantity),
+      original_purchase_date = COALESCE(excluded.original_purchase_date, storekit_transactions.original_purchase_date),
+      app_transaction_id = COALESCE(excluded.app_transaction_id, storekit_transactions.app_transaction_id),
       latest_signed_date = COALESCE(excluded.latest_signed_date, storekit_transactions.latest_signed_date),
       last_seen_at = excluded.last_seen_at
     ${monotonicWriteGuard("storekit_transactions")}`
@@ -272,6 +314,19 @@ function subscriptionBindings(
     snapshot.isUpgraded ? 1 : 0,
     snapshot.productType,
     snapshot.offerDiscountType,
+    snapshot.offerType,
+    snapshot.offerIdentifier,
+    snapshot.offerPeriod,
+    snapshot.price,
+    snapshot.storefront,
+    snapshot.storefrontId,
+    snapshot.transactionReason,
+    snapshot.quantity,
+    snapshot.originalPurchaseDate,
+    snapshot.appTransactionId,
+    snapshot.renewalDate,
+    snapshot.recentSubscriptionStartDate,
+    snapshot.eligibleWinBackOfferIds ? JSON.stringify(snapshot.eligibleWinBackOfferIds) : null,
     snapshot.signedDate,
     snapshot.autoRenewStatus,
     snapshot.autoRenewProductId,
@@ -317,6 +372,16 @@ function transactionBindings(
     snapshot.isUpgraded ? 1 : 0,
     snapshot.productType,
     snapshot.offerDiscountType,
+    snapshot.offerType,
+    snapshot.offerIdentifier,
+    snapshot.offerPeriod,
+    snapshot.price,
+    snapshot.storefront,
+    snapshot.storefrontId,
+    snapshot.transactionReason,
+    snapshot.quantity,
+    snapshot.originalPurchaseDate,
+    snapshot.appTransactionId,
     snapshot.signedDate,
     nowIso,
     snapshot.resolvedAt
@@ -413,6 +478,19 @@ const SUBSCRIPTION_RECORD_COLUMNS = `SELECT
       is_upgraded AS isUpgraded,
       product_type AS productType,
       offer_discount_type AS offerDiscountType,
+      offer_type AS offerType,
+      offer_identifier AS offerIdentifier,
+      offer_period AS offerPeriod,
+      price,
+      storefront,
+      storefront_id AS storefrontId,
+      transaction_reason AS transactionReason,
+      quantity,
+      original_purchase_date AS originalPurchaseDate,
+      app_transaction_id AS appTransactionId,
+      renewal_date AS renewalDate,
+      recent_subscription_start_date AS recentSubscriptionStartDate,
+      eligible_win_back_offer_ids AS eligibleWinBackOfferIds,
       latest_signed_date AS latestSignedDate,
       auto_renew_status AS autoRenewStatus,
       auto_renew_product_id AS autoRenewProductId,

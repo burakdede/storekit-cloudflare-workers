@@ -84,6 +84,19 @@ type StoreKitSubscriptionRow = {
   is_upgraded: number
   product_type: string | null
   offer_discount_type: string | null
+  offer_type: number | null
+  offer_identifier: string | null
+  offer_period: string | null
+  price: number | null
+  storefront: string | null
+  storefront_id: string | null
+  transaction_reason: string | null
+  quantity: number | null
+  original_purchase_date: string | null
+  app_transaction_id: string | null
+  renewal_date: string | null
+  recent_subscription_start_date: string | null
+  eligible_win_back_offer_ids: string | null
   latest_signed_date: string | null
   auto_renew_status: number | null
   auto_renew_product_id: string | null
@@ -133,6 +146,16 @@ type StoreKitTransactionRow = {
   source: string
   product_type: string | null
   offer_discount_type: string | null
+  offer_type: number | null
+  offer_identifier: string | null
+  offer_period: string | null
+  price: number | null
+  storefront: string | null
+  storefront_id: string | null
+  transaction_reason: string | null
+  quantity: number | null
+  original_purchase_date: string | null
+  app_transaction_id: string | null
   latest_signed_date: string | null
   first_seen_at: string
   last_seen_at: string
@@ -257,6 +280,19 @@ export class MockD1Database {
       | "is_upgraded"
       | "product_type"
       | "offer_discount_type"
+      | "offer_type"
+      | "offer_identifier"
+      | "offer_period"
+      | "price"
+      | "storefront"
+      | "storefront_id"
+      | "transaction_reason"
+      | "quantity"
+      | "original_purchase_date"
+      | "app_transaction_id"
+      | "renewal_date"
+      | "recent_subscription_start_date"
+      | "eligible_win_back_offer_ids"
       | "latest_signed_date"
       | "auto_renew_status"
       | "auto_renew_product_id"
@@ -280,6 +316,19 @@ export class MockD1Database {
       is_upgraded: 0,
       product_type: null,
       offer_discount_type: null,
+      offer_type: null,
+      offer_identifier: null,
+      offer_period: null,
+      price: null,
+      storefront: null,
+      storefront_id: null,
+      transaction_reason: null,
+      quantity: null,
+      original_purchase_date: null,
+      app_transaction_id: null,
+      renewal_date: null,
+      recent_subscription_start_date: null,
+      eligible_win_back_offer_ids: null,
       latest_signed_date: null,
       auto_renew_status: null,
       auto_renew_product_id: null,
@@ -814,6 +863,34 @@ export class MockD1Database {
           values.offer_discount_type as string | null,
           existing?.offer_discount_type
         ),
+        offer_type: keep(values.offer_type as number | null, existing?.offer_type),
+        offer_identifier: keep(
+          values.offer_identifier as string | null,
+          existing?.offer_identifier
+        ),
+        offer_period: keep(values.offer_period as string | null, existing?.offer_period),
+        price: keep(values.price as number | null, existing?.price),
+        storefront: keep(values.storefront as string | null, existing?.storefront),
+        storefront_id: keep(values.storefront_id as string | null, existing?.storefront_id),
+        transaction_reason: keep(
+          values.transaction_reason as string | null,
+          existing?.transaction_reason
+        ),
+        quantity: keep(values.quantity as number | null, existing?.quantity),
+        original_purchase_date: keep(
+          values.original_purchase_date as string | null,
+          existing?.original_purchase_date
+        ),
+        app_transaction_id: keep(
+          values.app_transaction_id as string | null,
+          existing?.app_transaction_id
+        ),
+        renewal_date: (values.renewal_date as string | null) ?? null,
+        recent_subscription_start_date: keep(
+          values.recent_subscription_start_date as string | null,
+          existing?.recent_subscription_start_date
+        ),
+        eligible_win_back_offer_ids: (values.eligible_win_back_offer_ids as string | null) ?? null,
         latest_signed_date: latestSignedDate ?? existing?.latest_signed_date ?? null,
         auto_renew_status: keep(
           values.auto_renew_status as number | null,
@@ -901,6 +978,28 @@ export class MockD1Database {
         offer_discount_type: keep(
           values.offer_discount_type as string | null,
           existing?.offer_discount_type
+        ),
+        offer_type: keep(values.offer_type as number | null, existing?.offer_type),
+        offer_identifier: keep(
+          values.offer_identifier as string | null,
+          existing?.offer_identifier
+        ),
+        offer_period: keep(values.offer_period as string | null, existing?.offer_period),
+        price: keep(values.price as number | null, existing?.price),
+        storefront: keep(values.storefront as string | null, existing?.storefront),
+        storefront_id: keep(values.storefront_id as string | null, existing?.storefront_id),
+        transaction_reason: keep(
+          values.transaction_reason as string | null,
+          existing?.transaction_reason
+        ),
+        quantity: keep(values.quantity as number | null, existing?.quantity),
+        original_purchase_date: keep(
+          values.original_purchase_date as string | null,
+          existing?.original_purchase_date
+        ),
+        app_transaction_id: keep(
+          values.app_transaction_id as string | null,
+          existing?.app_transaction_id
         ),
         latest_signed_date: latestSignedDate ?? existing?.latest_signed_date ?? null,
         first_seen_at: existing?.first_seen_at ?? String(values.first_seen_at),
@@ -1172,6 +1271,19 @@ export class MockD1Database {
       isUpgraded: row.is_upgraded,
       productType: row.product_type,
       offerDiscountType: row.offer_discount_type,
+      offerType: row.offer_type,
+      offerIdentifier: row.offer_identifier,
+      offerPeriod: row.offer_period,
+      price: row.price,
+      storefront: row.storefront,
+      storefrontId: row.storefront_id,
+      transactionReason: row.transaction_reason,
+      quantity: row.quantity,
+      originalPurchaseDate: row.original_purchase_date,
+      appTransactionId: row.app_transaction_id,
+      renewalDate: row.renewal_date,
+      recentSubscriptionStartDate: row.recent_subscription_start_date,
+      eligibleWinBackOfferIds: row.eligible_win_back_offer_ids,
       latestSignedDate: row.latest_signed_date,
       autoRenewStatus: row.auto_renew_status,
       autoRenewProductId: row.auto_renew_product_id,

@@ -42,6 +42,18 @@ export interface StoreKitEntitlementTransaction {
   inAppOwnershipType?: string | undefined
   /** The group the subscription belongs to. Absent for non-subscription products. */
   subscriptionGroupIdentifier?: string | undefined
+  /** The price in **milliunits**: 9990 is 9.99, not 9990. */
+  price?: number | undefined
+  currency?: string | undefined
+  storefront?: string | undefined
+  storefrontId?: string | undefined
+  /** `PURCHASE` or `RENEWAL`: a customer's own purchase versus one the system initiated. */
+  transactionReason?: string | undefined
+  quantity?: number | undefined
+  offerIdentifier?: string | undefined
+  offerPeriod?: string | undefined
+  originalPurchaseDate?: number | undefined
+  appTransactionId?: string | undefined
 }
 
 /**
@@ -62,6 +74,12 @@ export interface StoreKitEntitlementRenewalInfo {
   currency?: string | undefined
   offerDiscountType?: string | undefined
   signedDate?: number | undefined
+  /** When the subscription next renews. Not derivable from `expiresDate` during a grace period. */
+  renewalDate?: number | undefined
+  recentSubscriptionStartDate?: number | undefined
+  /** Win-back offers this customer is eligible for (`offerType` 4, iOS 18). */
+  eligibleWinBackOfferIds?: string[] | undefined
+  offerIdentifier?: string | undefined
 }
 
 export interface StoreKitEntitlementCandidate {
@@ -301,13 +319,26 @@ function baseSnapshot(
     productType: transaction.type ?? null,
     offerDiscountType: transaction.offerDiscountType ?? null,
     signedDate: isoFromAppleMillis(transaction.signedDate ?? renewalInfo?.signedDate),
+    originalPurchaseDate: isoFromAppleMillis(transaction.originalPurchaseDate),
+    price: transaction.price ?? null,
+    storefront: transaction.storefront ?? null,
+    storefrontId: transaction.storefrontId ?? null,
+    transactionReason: transaction.transactionReason ?? null,
+    quantity: transaction.quantity ?? null,
+    offerType: transaction.offerType ?? null,
+    offerIdentifier: transaction.offerIdentifier ?? renewalInfo?.offerIdentifier ?? null,
+    offerPeriod: transaction.offerPeriod ?? null,
+    appTransactionId: transaction.appTransactionId ?? null,
+    renewalDate: isoFromAppleMillis(renewalInfo?.renewalDate),
+    recentSubscriptionStartDate: isoFromAppleMillis(renewalInfo?.recentSubscriptionStartDate),
+    eligibleWinBackOfferIds: renewalInfo?.eligibleWinBackOfferIds ?? null,
     autoRenewStatus: renewalInfo?.autoRenewStatus ?? null,
     autoRenewProductId: renewalInfo?.autoRenewProductId ?? null,
     expirationIntent: renewalInfo?.expirationIntent ?? null,
     isInBillingRetryPeriod: renewalInfo?.isInBillingRetryPeriod ?? null,
     priceIncreaseStatus: renewalInfo?.priceIncreaseStatus ?? null,
     renewalPrice: renewalInfo?.renewalPrice ?? null,
-    currency: renewalInfo?.currency ?? null,
+    currency: renewalInfo?.currency ?? transaction.currency ?? null,
     source: candidate.source,
     resolvedAt: now.toISOString()
   }

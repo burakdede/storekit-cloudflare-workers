@@ -130,6 +130,36 @@ export interface StoreKitEntitlementSnapshot {
   isUpgraded: boolean
   productType: string | null
   offerDiscountType: string | null
+  /** Apple's offer type: 1 introductory, 2 promotional, 3 offer code, 4 win-back. */
+  offerType: number | null
+  /** Which specific offer was applied, for attributing a conversion to it. */
+  offerIdentifier: string | null
+  offerPeriod: string | null
+  /**
+   * The price in **milliunits**. `9990` is 9.99, not 9990.
+   *
+   * Reading this as currency units is a three-orders-of-magnitude error that looks entirely
+   * plausible in test data, which is why the unit is repeated everywhere it appears.
+   */
+  price: number | null
+  /** The App Store storefront country, e.g. `USA`. Drives tax, pricing and availability. */
+  storefront: string | null
+  storefrontId: string | null
+  /** `PURCHASE` or `RENEWAL`: the difference between a new subscriber and a retained one. */
+  transactionReason: string | null
+  quantity: number | null
+  originalPurchaseDate: string | null
+  appTransactionId: string | null
+  /**
+   * When the subscription next renews.
+   *
+   * This is what a UI shows. It cannot be derived from `expiresDate`, which during a billing grace
+   * period is already in the past — exactly when a customer goes looking.
+   */
+  renewalDate: string | null
+  recentSubscriptionStartDate: string | null
+  /** Win-back offers this customer is eligible for (`offerType` 4, iOS 18). */
+  eligibleWinBackOfferIds: string[] | null
   /** Apple's signing time for the material behind this snapshot; the out-of-order write guard. */
   signedDate: string | null
   autoRenewStatus: number | null
