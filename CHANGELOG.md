@@ -47,6 +47,20 @@
 - A superseded transaction standing alone resolves to the new `upgraded` status rather than
   `expired`, since the customer did not churn. Migration `0004_is_upgraded.sql` adds the column.
 
+### Testing
+
+- **Signature and certificate chain verification is now actually tested.** `src/verification.ts` was
+  wrapped end to end in a `v8 ignore` block, reporting 100% coverage while executing none of its
+  logic, and the conformance suite deliberately ran under `Environment.LOCAL_TESTING`, which skips
+  both signature and chain validation. Nothing proved that a forged payload was rejected.
+- Tests now run Apple's real `SignedDataVerifier` in `SANDBOX` mode against a purpose-built
+  certificate authority satisfying every rule the SDK enforces. Covered in both directions: a valid
+  payload verifies; a foreign root, an unsigned leaf, a missing Apple marker OID, an expired chain, a
+  tampered body and a wrong bundle are each rejected — asserting the SDK's `VerificationStatus`, not
+  merely that something threw. The unauthenticated webhook path is covered the same way.
+- The `v8 ignore` block is narrowed to the client construction that genuinely needs real App Store
+  Connect credentials, so `verification.ts` now reports honest coverage.
+
 ### Integration surface
 
 - **`onEntitlementChange` lets a host react to an entitlement changing.** Previously a refund could
@@ -93,6 +107,20 @@ First release. Server-authoritative StoreKit 2 for Cloudflare Workers and D1.
   payload, which is also what lets `REFUND` and `REVOKE` revoke access despite carrying no
   subscription `status`.
 - The notification UUID replay ledger and the projection are written in one atomic D1 batch.
+
+### Testing
+
+- **Signature and certificate chain verification is now actually tested.** `src/verification.ts` was
+  wrapped end to end in a `v8 ignore` block, reporting 100% coverage while executing none of its
+  logic, and the conformance suite deliberately ran under `Environment.LOCAL_TESTING`, which skips
+  both signature and chain validation. Nothing proved that a forged payload was rejected.
+- Tests now run Apple's real `SignedDataVerifier` in `SANDBOX` mode against a purpose-built
+  certificate authority satisfying every rule the SDK enforces. Covered in both directions: a valid
+  payload verifies; a foreign root, an unsigned leaf, a missing Apple marker OID, an expired chain, a
+  tampered body and a wrong bundle are each rejected — asserting the SDK's `VerificationStatus`, not
+  merely that something threw. The unauthenticated webhook path is covered the same way.
+- The `v8 ignore` block is narrowed to the client construction that genuinely needs real App Store
+  Connect credentials, so `verification.ts` now reports honest coverage.
 
 ### Integration surface
 

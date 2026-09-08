@@ -60,6 +60,22 @@ environment claim checks. Real ES256-signed payloads pass through it into this m
 checks and entitlement policy, including a case that proves the grace-period behaviour on a
 genuinely decoded `gracePeriodExpiresDate`.
 
+**Real signature and chain verification.** `storekit-jws-verification.test.ts` runs the verifier in
+`SANDBOX` mode, where nothing is skipped, against a purpose-built certificate authority
+(`test/helpers/apple-test-ca.ts`). The chain satisfies every rule read out of the SDK's
+`verifyCertificateChainWithoutCaching`: three certificates in `x5c`, an intermediate signed by the
+root, a leaf signed by the intermediate, `CA:TRUE` on the intermediate, Apple's marker OIDs
+`1.2.840.113635.100.6.2.1` and `1.2.840.113635.100.6.11.1`, and validity at the payload's
+`signedDate`.
+
+Both directions are covered. A correctly signed payload verifies and flows into the module's claim
+checks; a payload rooted in a different CA, a leaf the intermediate never signed, a leaf missing
+Apple's marker OID, a chain expired at signing time, a body altered after signing, and a payload for
+another bundle are each rejected — and each assertion pins the SDK's `VerificationStatus` rather than
+merely expecting a throw, so a fixture that failed to parse cannot masquerade as a caught forgery.
+The webhook path is covered the same way, since it is unauthenticated at the HTTP layer and the
+signature is the only control on it.
+
 The value assertions were mutation-tested rather than assumed: renaming `FREE_TRIAL` or
 `Non-Consumable` in the source each fails exactly one test.
 
@@ -81,13 +97,13 @@ never block a pull request on Apple's release timing.
 Being explicit about the limits, because the sections above could otherwise read as a stronger
 guarantee than they are.
 
-| Not covered                           | Why                                                                                                                                           | What covers it instead                                                                         |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Certificate chain validation          | `LOCAL_TESTING` skips it by design, and Apple's test certificates are not in the npm tarball (`files: ["dist"]` excludes `tests/resources/`). | Apple's own test suite. To test it here you would vendor their Apache-2.0 test CA from GitHub. |
-| OCSP revocation checking              | Disabled: Apple's SDK OCSP path calls `Response.buffer()`, which the Workers runtime does not provide.                                        | Nothing. This is a documented, accepted limitation; see `docs/security.md`.                    |
-| Apple's live API response shapes      | No test calls the real App Store Server API. It needs real credentials and a real subscriber.                                                 | Sandbox testing before release; see `docs/release-checklist.md`.                               |
-| Apple's server-side behaviour changes | If Apple starts populating a field differently without changing the SDK, no static check can see it.                                          | Sandbox testing, and the weekly CI run only if the SDK itself changes.                         |
-| Real notification delivery            | Apple's retry timing and delivery order cannot be reproduced locally.                                                                         | `requestStoreKitTestNotification` against a deployed Worker.                                   |
+| Not covered                           | Why                                                                                                                                                       | What covers it instead                                                                                 |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Apple's _own_ root certificates       | The suite builds its own CA, so it proves the verifier enforces the rules — not that the roots in your `APPLE_ROOT_CERTIFICATES_PEM` are the right bytes. | `describeStoreKitConfig` catches an unparseable bundle; a sandbox purchase catches a subtly wrong one. |
+| OCSP revocation checking              | Disabled: Apple's SDK OCSP path calls `Response.buffer()`, which the Workers runtime does not provide.                                                    | Nothing. This is a documented, accepted limitation; see `docs/security.md`.                            |
+| Apple's live API response shapes      | No test calls the real App Store Server API. It needs real credentials and a real subscriber.                                                             | Sandbox testing before release; see `docs/release-checklist.md`.                                       |
+| Apple's server-side behaviour changes | If Apple starts populating a field differently without changing the SDK, no static check can see it.                                                      | Sandbox testing, and the weekly CI run only if the SDK itself changes.                                 |
+| Real notification delivery            | Apple's retry timing and delivery order cannot be reproduced locally.                                                                                     | `requestStoreKitTestNotification` against a deployed Worker.                                           |
 
 The practical consequence: **CI proves this module still agrees with the Apple SDK. It does not
 prove the SDK still agrees with Apple's servers.** Sandbox testing is not optional before a
