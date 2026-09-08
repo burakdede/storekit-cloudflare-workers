@@ -37,12 +37,14 @@ export {
 
 export {
   STOREKIT_ENVIRONMENT,
+  STOREKIT_NOTIFICATION_TYPE,
   STOREKIT_STATUS,
   type StoreKitEntitlementSnapshot,
   type StoreKitEntitlementSource,
   type StoreKitEntitlementStatus,
   type StoreKitEnv,
-  type StoreKitEnvironment
+  type StoreKitEnvironment,
+  type StoreKitNotificationType
 } from "./types.js"
 
 export {
