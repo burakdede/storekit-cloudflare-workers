@@ -91,7 +91,7 @@ type AppleServerApiClient = StoreKitRuntime["client"] & {
 }
 /* eslint-enable no-unused-vars */
 
-/* v8 ignore start -- Apple SDK verifier/client wiring requires Apple-signed JWS fixtures. */
+/* v8 ignore start -- Constructing the Apple client needs real App Store Connect credentials. */
 async function loadStoreKitLibrary(): Promise<typeof StoreKitLibrary> {
   return import("@apple/app-store-server-library")
 }
@@ -176,6 +176,7 @@ export async function buildStoreKitRuntimes(env: StoreKitEnv): Promise<StoreKitR
   const environments = storeKitConfiguredEnvironments(env)
   return Promise.all(environments.map((environment) => buildStoreKitRuntime(env, environment)))
 }
+/* v8 ignore stop */
 
 function assertVerifiedTransactionAllowed(
   transaction: JWSTransactionDecodedPayload,
@@ -701,7 +702,6 @@ export async function verifyStoreKitNotification(
   const { verified } = await verifyStoreKitNotificationForRuntime(signedPayload, env)
   return verified
 }
-/* v8 ignore stop */
 
 export function storeKitStatusName(status: number | undefined): string {
   switch (status) {

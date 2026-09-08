@@ -95,17 +95,19 @@ roots, and one the other identity checks above do not depend on.
 The verification chain above is exercised in tests, but not uniformly, and the difference matters
 when you are judging risk.
 
-**Proved in CI:** the claim checks (steps 2 to 10). Apple's real `SignedDataVerifier` runs under
-`Environment.LOCAL_TESTING`, which performs genuine decoding, schema validation and its own bundle
-and environment checks, and the module's identity pinning and entitlement policy run on the result.
+**Proved in CI:** all ten steps, including step 1. Apple's real `SignedDataVerifier` runs in
+`SANDBOX` mode — where nothing is skipped — against a certificate authority built for the tests,
+shaped to satisfy every rule the SDK enforces. A payload rooted in a different CA, a leaf the
+intermediate never signed, a leaf missing Apple's marker OID, an expired chain, a body altered after
+signing, and a payload for another bundle are each rejected, and each assertion pins the SDK's own
+`VerificationStatus` rather than merely expecting a throw. The webhook path is covered the same way.
 Every Apple constant the policy compares against is asserted equal to the SDK's exported enum.
 
-**Not proved in CI:** step 1, signature and certificate chain validation. `LOCAL_TESTING` skips it
-by design, and Apple's test certificates are not published in the npm tarball. The implementation is
-Apple's own library code and is covered by Apple's test suite, but the fact that _your_
-`APPLE_ROOT_CERTIFICATES_PEM` produces a working chain is only established by a real sandbox
-purchase. Treat that as a required release step, not a nice-to-have; a malformed root bundle fails
-every verification, which `describeStoreKitConfig` catches, but a subtly wrong one may not.
+**Still not proved in CI:** that _your_ `APPLE_ROOT_CERTIFICATES_PEM` holds Apple's real roots. The
+suite proves the verifier enforces the rules; it cannot prove your secret contains the right bytes,
+because it supplies its own. A malformed bundle fails every verification and
+`describeStoreKitConfig` catches it, but a subtly wrong one may not. A sandbox purchase before
+release remains the check for that, and the release checklist treats it as required.
 
 Full breakdown in [apple-contract.md](apple-contract.md#what-is-not-verified-here).
 
