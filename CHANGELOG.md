@@ -30,6 +30,14 @@
 - A transaction signed before Apple added the field reports `null` and is treated as purchased, so
   no existing entitlement changes on upgrade.
 - Migration `0002_in_app_ownership_type.sql` adds the column to both projections.
+- **Revocation is no longer collapsed to one state.** Apple's status 5 covers both a refund and
+  Family Sharing ending, and `revocationType` separates them. `REFUND_FULL` and `REFUND_PRORATED`
+  report `refunded`; `FAMILY_REVOKE` reports the new `family_revoked` status, because the organiser's
+  subscription is alive and paid for and a refund that never happened does not belong in support or
+  revenue reporting. `revocationType` and `revocationPercentage` (milliunits) are on the snapshot and
+  both projections. All three still deny access, so no entitlement decision changes.
+- A revocation Apple sent without a type, and every row written before this change, continues to
+  report `refunded`. Migration `0003_revocation_detail.sql` adds the columns.
 
 ### API
 

@@ -60,6 +60,40 @@ describe("StoreKit D1 adapter", () => {
     ).toMatchObject({ inAppOwnershipType: "FAMILY_SHARED" })
   })
 
+  it("round-trips revocation type and percentage through both projections", async () => {
+    const db = new MockD1Database()
+
+    await persistStoreKitSubscriptionForInstallation(
+      entitlementSnapshot({
+        proActive: false,
+        status: "refunded",
+        revocationDate: "2026-06-02T12:00:00.000Z",
+        revocationType: "REFUND_PRORATED",
+        revocationPercentage: 40_000
+      }),
+      "installation-1",
+      "com.example.app",
+      env(db)
+    )
+
+    expect(db.getStoreKitSubscriptionRows()[0]).toMatchObject({
+      revocation_type: "REFUND_PRORATED",
+      revocation_percentage: 40_000
+    })
+    expect(db.getStoreKitTransactionRows()[0]).toMatchObject({
+      revocation_type: "REFUND_PRORATED",
+      revocation_percentage: 40_000
+    })
+    expect(
+      await loadStoreKitSubscriptionByInstallation(
+        "installation-1",
+        new Date("2026-06-03T12:00:00.000Z"),
+        ["Sandbox"],
+        env(db)
+      )
+    ).toMatchObject({ revocationType: "REFUND_PRORATED", revocationPercentage: 40_000 })
+  })
+
   it("records transaction-less notifications without creating entitlement state", async () => {
     const db = new MockD1Database()
 

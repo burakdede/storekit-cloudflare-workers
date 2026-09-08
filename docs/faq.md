@@ -100,6 +100,23 @@ never revokes anything. This package keys on `revocationDate` instead, and revoc
 out-of-order write guard, because a refund is terminal and monotonic — it must land even when Apple
 signed it before the renewal it supersedes.
 
+### A customer's access ended but nobody was refunded. Why does it say `family_revoked`?
+
+Because that is what happened. Apple's subscription status 5 covers both a refund and Family Sharing
+ending, and `revocationType` is the field that separates them:
+
+| `revocationType`  | Status           | Money moved                              |
+| ----------------- | ---------------- | ---------------------------------------- |
+| `REFUND_FULL`     | `refunded`       | yes, in full                             |
+| `REFUND_PRORATED` | `refunded`       | yes, in part; see `revocationPercentage` |
+| `FAMILY_REVOKE`   | `family_revoked` | no                                       |
+
+All three end access to that transaction, so the distinction is for reporting rather than for
+gating. Counting a family revoke as a refund puts a refund that never happened into your dashboard,
+and the organiser's subscription is meanwhile alive and still being paid for.
+
+`revocationPercentage` is in **milliunits**: `100000` is 100%, `40000` is 40%.
+
 ### What happens when notifications arrive out of order?
 
 Writes are guarded on Apple's **signing time**, not your server clock. A `DID_RENEW` that Apple

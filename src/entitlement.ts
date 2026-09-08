@@ -26,6 +26,10 @@ export interface StoreKitEntitlementTransaction {
   purchaseDate?: number | undefined
   revocationDate?: number | undefined
   revocationReason?: number | undefined
+  /** `REFUND_FULL`, `REFUND_PRORATED` or `FAMILY_REVOKE`. Absent on older signed material. */
+  revocationType?: string | undefined
+  /** The proportion of the transaction revoked, in milliunits. `100000` is 100%. */
+  revocationPercentage?: number | undefined
   webOrderLineItemId?: string | undefined
   appAccountToken?: string | undefined
   offerType?: number | undefined
@@ -76,6 +80,7 @@ const INTRODUCTORY_OFFER = 1
 const FREE_TRIAL = "FREE_TRIAL"
 const NON_CONSUMABLE = "Non-Consumable"
 const FAMILY_SHARED = "FAMILY_SHARED"
+const FAMILY_REVOKE = "FAMILY_REVOKE"
 
 /**
  * How the policy treats states Apple leaves to the developer.
@@ -279,6 +284,8 @@ function baseSnapshot(
     purchaseDate: isoFromAppleMillis(transaction.purchaseDate),
     revocationDate: isoFromAppleMillis(transaction.revocationDate),
     revocationReason: transaction.revocationReason ?? null,
+    revocationType: transaction.revocationType ?? null,
+    revocationPercentage: transaction.revocationPercentage ?? null,
     appAccountToken: transaction.appAccountToken ?? null,
     inAppOwnershipType: transaction.inAppOwnershipType ?? null,
     productType: transaction.type ?? null,
@@ -328,7 +335,12 @@ export function resolveStoreKitEntitlementCore(
   const { transaction, status, renewalInfo } = candidate
 
   if (transaction.revocationDate) {
-    return baseSnapshot(candidate, input.environment, "refunded", false, now)
+    // Apple's status 5 conflates a refund with Family Sharing ending, and `revocationType` is what
+    // separates them. Reporting a family revoke as a refund is wrong in a way that reaches the
+    // operator: the organiser's subscription is alive and paid for, and a refund that never
+    // happened turns up in support and revenue reporting.
+    const status = transaction.revocationType === FAMILY_REVOKE ? "family_revoked" : "refunded"
+    return baseSnapshot(candidate, input.environment, status, false, now)
   }
   if (!isValidEntitlementProduct(transaction)) {
     return baseSnapshot(candidate, input.environment, "unknown", false, now)

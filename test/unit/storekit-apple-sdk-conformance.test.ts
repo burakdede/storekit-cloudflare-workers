@@ -24,6 +24,7 @@ import {
   OfferDiscountType,
   OfferType,
   RevocationReason,
+  RevocationType,
   SignedDataVerifier,
   Status,
   Type,
@@ -121,6 +122,24 @@ describe("Apple SDK conformance", () => {
 
       expect(shared.status).toBe("family_shared")
       expect(purchased.status).toBe("active_paid")
+    })
+
+    // `FAMILY_REVOKE` is compared as a bare literal, so only this assertion catches Apple renaming
+    // it and every family revoke silently becoming a reported refund.
+    it("separates a family revoke from a refund by Apple's own revocation enum", () => {
+      const revokedAt = Date.parse("2026-05-01T00:00:00.000Z")
+      const familyRevoke = resolveStoreKitEntitlementCore(
+        entitlementInput({
+          revocationDate: revokedAt,
+          revocationType: RevocationType.FAMILY_REVOKE
+        })
+      )
+      const refund = resolveStoreKitEntitlementCore(
+        entitlementInput({ revocationDate: revokedAt, revocationType: RevocationType.REFUND_FULL })
+      )
+
+      expect(familyRevoke.status).toBe("family_revoked")
+      expect(refund.status).toBe("refunded")
     })
 
     it("stores Apple's revocation reason as-is", () => {

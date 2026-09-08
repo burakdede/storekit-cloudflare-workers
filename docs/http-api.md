@@ -59,6 +59,8 @@ The full entitlement snapshot, resolved from verified claims only:
   "purchaseDate": "2026-08-21T10:04:12.000Z",
   "revocationDate": null,
   "revocationReason": null,
+  "revocationType": null,
+  "revocationPercentage": null,
   "appAccountToken": "6a3f1c5e-6a3f-4c5e-8a3f-1c5e6a3f1c5e",
   "inAppOwnershipType": "PURCHASED",
   "productType": "Auto-Renewable Subscription",
@@ -232,19 +234,20 @@ Structured events carry no secrets, no signed payloads, and no bearer tokens. Se
 
 ### `status` values
 
-| Value           | Access | Meaning                                                                                 |
-| --------------- | ------ | --------------------------------------------------------------------------------------- |
-| `active_paid`   | yes    | Paid and current.                                                                       |
-| `active_trial`  | yes    | In a **free** trial.                                                                    |
-| `grace_period`  | yes¹   | Renewal failed; Apple is retrying and still serving the customer.                       |
-| `perpetual`²    | yes    | Non-consumable, reported through `perpetual: true` with `status: "active_paid"`.        |
-| `billing_retry` | no     | Retrying with no grace period left. Prompt for a payment update, do not treat as churn. |
-| `expired`       | no     | Lapsed.                                                                                 |
-| `revoked`       | no     | Family sharing or entitlement revoked.                                                  |
-| `refunded`      | no     | Refunded. Terminal, and it can arrive after a newer renewal.                            |
-| `family_shared` | no³    | A Family Sharing purchase your policy excludes.                                         |
-| `free`          | no     | No purchase on record.                                                                  |
-| `unknown`       | no     | Apple returned a status this version does not map.                                      |
+| Value            | Access | Meaning                                                                                 |
+| ---------------- | ------ | --------------------------------------------------------------------------------------- |
+| `active_paid`    | yes    | Paid and current.                                                                       |
+| `active_trial`   | yes    | In a **free** trial.                                                                    |
+| `grace_period`   | yes¹   | Renewal failed; Apple is retrying and still serving the customer.                       |
+| `perpetual`²     | yes    | Non-consumable, reported through `perpetual: true` with `status: "active_paid"`.        |
+| `billing_retry`  | no     | Retrying with no grace period left. Prompt for a payment update, do not treat as churn. |
+| `expired`        | no     | Lapsed.                                                                                 |
+| `revoked`        | no     | Apple reported status 5 with nothing to attribute it to.                                |
+| `refunded`       | no     | Refunded, fully or prorated. Terminal, and it can arrive after a newer renewal.         |
+| `family_revoked` | no     | Family Sharing ended. Nobody was refunded.                                              |
+| `family_shared`  | no³    | A Family Sharing purchase your policy excludes.                                         |
+| `free`           | no     | No purchase on record.                                                                  |
+| `unknown`        | no     | Apple returned a status this version does not map.                                      |
 
 ¹ Controlled by `STOREKIT_ALLOW_GRACE_PERIOD_ACCESS`, which defaults to `true` (Apple's intent).
 ² Not a distinct `status` string; check the `perpetual` boolean.
