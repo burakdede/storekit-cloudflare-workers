@@ -21,7 +21,8 @@ operational Apple calls, without writing any of it yourself.
 
 **Docs:** [Quick start](#setup) · [HTTP API](docs/http-api.md) · [TypeScript API](docs/api.md) ·
 [iOS client](docs/ios-client.md) · [Configuration](docs/configuration.md) ·
-[Security](docs/security.md) · [Operations](docs/operations.md) · [FAQ](docs/faq.md)
+[Testing](docs/testing.md) · [Security](docs/security.md) · [Operations](docs/operations.md) ·
+[FAQ](docs/faq.md)
 
 ```bash
 npm install storekit-cloudflare-workers
@@ -399,6 +400,7 @@ And `resolveStoreKitEntitlementCore` is the pure policy kernel: no Apple SDK, no
 | [http-api.md](docs/http-api.md)                   | Every route, request and response body, error codes, field meanings |
 | [api.md](docs/api.md)                             | Every TypeScript export, option, and returned type                  |
 | [ios-client.md](docs/ios-client.md)               | Swift integration: purchase, restore, updates, gating access        |
+| [testing.md](docs/testing.md)                     | Testing your integration, and what only sandbox can prove           |
 | [configuration.md](docs/configuration.md)         | Every variable and secret, where to get it, trade-offs              |
 | [security.md](docs/security.md)                   | Trust boundaries and the full verification chain                    |
 | [operations.md](docs/operations.md)               | Webhook behaviour, outage recovery, troubleshooting                 |

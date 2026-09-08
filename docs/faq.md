@@ -352,6 +352,20 @@ Signature verification and full certificate chain validation are unaffected;
 **every** problem at once with secret presence but no values. Mounting the handler yourself? Call
 `describeStoreKitConfig(env)` from your own health route.
 
+### How do I test my integration without making real purchases?
+
+Supply a stubbed Apple through the `runtimes` option. The runtime's verifier is structural, so your
+fixtures can be plain JSON and the verifier can just parse them — no certificates, no signing keys,
+no App Store Connect credentials. Everything else stays real: your `authenticate`, the entitlement
+policy, the D1 writes, the status codes.
+
+Set `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK=false` in tests. With it on, a request that could not reach
+Apple still succeeds by resolving from the client's own JWS — so a passing suite does not prove Apple
+was ever consulted. That exact trap made six of seven of this package's own end-to-end tests pass
+against a stub that was not applied.
+
+Full recipe, and what only a sandbox purchase can prove, in [testing.md](testing.md).
+
 ### How do I test the webhook end to end?
 
 `await requestStoreKitTestNotification(env)` asks Apple to deliver a real notification to your

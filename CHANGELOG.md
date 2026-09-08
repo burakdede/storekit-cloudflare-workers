@@ -79,6 +79,18 @@ new cases, or a default.
 - A superseded transaction standing alone resolves to the new `upgraded` status rather than
   `expired`, since the customer did not churn. Migration `0004_is_upgraded.sql` adds the column.
 
+### Documentation
+
+- **`docs/testing.md`**: how to test an integration. Tier rules against the pure policy kernel, the
+  whole stack against a stubbed Apple using plain-JSON fixtures and no credentials, and what only a
+  sandbox purchase can establish. It also documents a dead end — Apple's `LOCAL_TESTING` environment
+  cannot be used here, because `STOREKIT_ALLOWED_ENVIRONMENTS` deliberately accepts only `Sandbox`
+  and `Production`, so the entitlement read answers `503`.
+- The guide warns to set `STOREKIT_ALLOW_APPLE_LOOKUP_FALLBACK=false` in tests: with it on, a request
+  that could not reach Apple still succeeds from the client's own JWS, so a green suite does not
+  prove Apple was consulted.
+- Its load-bearing example is a test rather than prose, so it is compiled and executed.
+
 ### Testing
 
 - **An end-to-end test drives a customer's whole lifecycle through the composed stack**: real HTTP
