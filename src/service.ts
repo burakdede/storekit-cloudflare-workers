@@ -5,10 +5,7 @@
  * service combines Apple verification, entitlement policy, and the D1 adapter so a Worker can use
  * the module through one call per operation.
  */
-import {
-  resolveStoreKitEntitlementCore,
-  type StoreKitEntitlementPolicy
-} from "./entitlement.js"
+import { resolveStoreKitEntitlementCore, type StoreKitEntitlementPolicy } from "./entitlement.js"
 import { StoreKitOwnershipConflictError, StoreKitVerificationError } from "./errors.js"
 import type { StoreKitEntitlementSnapshot, StoreKitEnv } from "./types.js"
 import {

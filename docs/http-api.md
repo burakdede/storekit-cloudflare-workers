@@ -60,6 +60,7 @@ The full entitlement snapshot, resolved from verified claims only:
   "revocationDate": null,
   "revocationReason": null,
   "appAccountToken": "6a3f1c5e-6a3f-4c5e-8a3f-1c5e6a3f1c5e",
+  "inAppOwnershipType": "PURCHASED",
   "productType": "Auto-Renewable Subscription",
   "offerDiscountType": null,
   "signedDate": "2026-08-21T10:04:13.000Z",
@@ -197,36 +198,37 @@ Structured events carry no secrets, no signed payloads, and no bearer tokens. Se
 
 ## Entitlement fields
 
-| Field                    | Type              | What it is                                                                                        |
-| ------------------------ | ----------------- | ------------------------------------------------------------------------------------------------- |
-| `proActive`              | boolean           | **Gate features on this.** Access right now, already accounting for grace periods and perpetuity. |
-| `accessExpiresAt`        | ISO string / null | When access actually lapses. `null` for a perpetual purchase. **Never gate on `expiresAt`.**      |
-| `expiresAt`              | ISO string / null | The subscription's own expiry, which is already in the past during a billing grace period.        |
-| `gracePeriodExpiresAt`   | ISO string / null | Apple's grace-period deadline, when one is running.                                               |
-| `perpetual`              | boolean           | True for a non-consumable, whose entitlement never lapses.                                        |
-| `isTrial`                | boolean           | A **free** trial, keyed off `offerDiscountType` — not paid introductory offers.                   |
-| `status`                 | string            | See the table below.                                                                              |
-| `productId`              | string / null     | The product currently granting access.                                                            |
-| `environment`            | string            | `Production` or `Sandbox`.                                                                        |
-| `autoRenewStatus`        | 0/1 / null        | `0` = the customer turned off renewal; access continues until `accessExpiresAt`.                  |
-| `autoRenewProductId`     | string / null     | What renews next, which differs from `productId` after an upgrade or downgrade.                   |
-| `expirationIntent`       | 1–4 / null        | Why it expired: `1` cancelled, `2` billing error, `3` price-increase refusal, `4` unavailable.    |
-| `isInBillingRetryPeriod` | boolean / null    | Apple is retrying payment.                                                                        |
-| `priceIncreaseStatus`    | 0/1 / null        | `0` = the customer has not consented to a price rise yet.                                         |
-| `renewalPrice`           | number / null     | In milliunits of `currency` (`9990` = 9.99).                                                      |
-| `currency`               | string / null     | ISO 4217.                                                                                         |
-| `originalTransactionId`  | string / null     | The stable id for the whole subscription lifecycle. Use it as your join key to Apple.             |
-| `latestTransactionId`    | string / null     | The most recent transaction behind this snapshot.                                                 |
-| `webOrderLineItemId`     | string / null     | Identifies a single renewal period.                                                               |
-| `appAccountToken`        | string / null     | The UUID your client pinned at purchase.                                                          |
-| `purchaseDate`           | ISO string / null | Original purchase time.                                                                           |
-| `revocationDate`         | ISO string / null | Set on a refund or family-sharing revocation. Terminal.                                           |
-| `revocationReason`       | 0/1 / null        | `1` = refunded for an app issue, `0` = other.                                                     |
-| `productType`            | string / null     | Apple's type, e.g. `Auto-Renewable Subscription`, `Non-Consumable`.                               |
-| `offerDiscountType`      | string / null     | `FREE_TRIAL`, `PAY_AS_YOU_GO`, `PAY_UP_FRONT`.                                                    |
-| `signedDate`             | ISO string / null | Apple's signing time, which is the out-of-order write guard.                                      |
-| `source`                 | string            | `posted_jws`, `apple_transaction_lookup`, or `app_store_history`.                                 |
-| `resolvedAt`             | ISO string        | When this answer was computed.                                                                    |
+| Field                    | Type              | What it is                                                                                             |
+| ------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------ |
+| `proActive`              | boolean           | **Gate features on this.** Access right now, already accounting for grace periods and perpetuity.      |
+| `accessExpiresAt`        | ISO string / null | When access actually lapses. `null` for a perpetual purchase. **Never gate on `expiresAt`.**           |
+| `expiresAt`              | ISO string / null | The subscription's own expiry, which is already in the past during a billing grace period.             |
+| `gracePeriodExpiresAt`   | ISO string / null | Apple's grace-period deadline, when one is running.                                                    |
+| `perpetual`              | boolean           | True for a non-consumable, whose entitlement never lapses.                                             |
+| `isTrial`                | boolean           | A **free** trial, keyed off `offerDiscountType` — not paid introductory offers.                        |
+| `status`                 | string            | See the table below.                                                                                   |
+| `productId`              | string / null     | The product currently granting access.                                                                 |
+| `environment`            | string            | `Production` or `Sandbox`.                                                                             |
+| `autoRenewStatus`        | 0/1 / null        | `0` = the customer turned off renewal; access continues until `accessExpiresAt`.                       |
+| `autoRenewProductId`     | string / null     | What renews next, which differs from `productId` after an upgrade or downgrade.                        |
+| `expirationIntent`       | 1–4 / null        | Why it expired: `1` cancelled, `2` billing error, `3` price-increase refusal, `4` unavailable.         |
+| `isInBillingRetryPeriod` | boolean / null    | Apple is retrying payment.                                                                             |
+| `priceIncreaseStatus`    | 0/1 / null        | `0` = the customer has not consented to a price rise yet.                                              |
+| `renewalPrice`           | number / null     | In milliunits of `currency` (`9990` = 9.99).                                                           |
+| `currency`               | string / null     | ISO 4217.                                                                                              |
+| `originalTransactionId`  | string / null     | The stable id for the whole subscription lifecycle. Use it as your join key to Apple.                  |
+| `latestTransactionId`    | string / null     | The most recent transaction behind this snapshot.                                                      |
+| `webOrderLineItemId`     | string / null     | Identifies a single renewal period.                                                                    |
+| `appAccountToken`        | string / null     | The UUID your client pinned at purchase.                                                               |
+| `inAppOwnershipType`     | string / null     | `PURCHASED` or `FAMILY_SHARED`. `null` on material signed before Apple added it, treated as purchased. |
+| `purchaseDate`           | ISO string / null | Original purchase time.                                                                                |
+| `revocationDate`         | ISO string / null | Set on a refund or family-sharing revocation. Terminal.                                                |
+| `revocationReason`       | 0/1 / null        | `1` = refunded for an app issue, `0` = other.                                                          |
+| `productType`            | string / null     | Apple's type, e.g. `Auto-Renewable Subscription`, `Non-Consumable`.                                    |
+| `offerDiscountType`      | string / null     | `FREE_TRIAL`, `PAY_AS_YOU_GO`, `PAY_UP_FRONT`.                                                         |
+| `signedDate`             | ISO string / null | Apple's signing time, which is the out-of-order write guard.                                           |
+| `source`                 | string            | `posted_jws`, `apple_transaction_lookup`, or `app_store_history`.                                      |
+| `resolvedAt`             | ISO string        | When this answer was computed.                                                                         |
 
 ### `status` values
 
@@ -240,8 +242,11 @@ Structured events carry no secrets, no signed payloads, and no bearer tokens. Se
 | `expired`       | no     | Lapsed.                                                                                 |
 | `revoked`       | no     | Family sharing or entitlement revoked.                                                  |
 | `refunded`      | no     | Refunded. Terminal, and it can arrive after a newer renewal.                            |
+| `family_shared` | no³    | A Family Sharing purchase your policy excludes.                                         |
 | `free`          | no     | No purchase on record.                                                                  |
 | `unknown`       | no     | Apple returned a status this version does not map.                                      |
 
 ¹ Controlled by `STOREKIT_ALLOW_GRACE_PERIOD_ACCESS`, which defaults to `true` (Apple's intent).
 ² Not a distinct `status` string; check the `perpetual` boolean.
+³ Only ever set when `STOREKIT_ALLOW_FAMILY_SHARING` is off. With the default, a family-shared
+purchase reports `active_paid` like any other and is distinguished by `inAppOwnershipType`.

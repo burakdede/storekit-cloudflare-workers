@@ -64,6 +64,7 @@ export default {
 | `allowGracePeriodAccess`          | `boolean`                                          | `STOREKIT_ALLOW_GRACE_PERIOD_ACCESS`, itself `true` | Code wins over the variable.                                            |
 | `reconcileNotificationsWithApple` | `boolean`                                          | `STOREKIT_RECONCILE_NOTIFICATIONS`, itself `true`   | Re-read Apple's status per notification.                                |
 | `allowAccountTransfer`            | `boolean`                                          | `STOREKIT_ALLOW_ACCOUNT_TRANSFER`, itself `false`   | Let a sync take an entitlement off the account that owns it.            |
+| `allowFamilySharing`              | `boolean`                                          | `STOREKIT_ALLOW_FAMILY_SHARING`, itself `true`      | Whether a `FAMILY_SHARED` purchase grants access.                       |
 | `onEvent`                         | `(event: Record<string, unknown>) => void`         | —                                                   | Structured logs. No secrets, payloads, or tokens are ever passed to it. |
 
 Returns `{ fetch, paths }`.
@@ -116,6 +117,7 @@ const { snapshot } = await syncStoreKitTransaction(
 | `allowGracePeriodAccess`          | `boolean?`    | Defaults to the Worker variable.               |
 | `reconcileNotificationsWithApple` | `boolean?`    | Defaults to the Worker variable.               |
 | `allowAccountTransfer`            | `boolean?`    | Defaults to the Worker variable, itself off.   |
+| `allowFamilySharing`              | `boolean?`    | Defaults to the Worker variable, itself on.    |
 | `sandboxAllowed`                  | `boolean?`    | Narrow the allowed environments for this call. |
 | `now`                             | `Date?`       | Inject the clock, for tests.                   |
 
@@ -123,7 +125,7 @@ const { snapshot } = await syncStoreKitTransaction(
 
 ## Entitlement policy
 
-`resolveStoreKitEntitlementCore(input, now?, allowGracePeriodAccess?)` is the pure kernel: no Apple
+`resolveStoreKitEntitlementCore(input, now?, policy?)` is the pure kernel: no Apple
 SDK, no D1, no HTTP, no clock of its own. It takes plain objects and returns a
 `StoreKitEntitlementSnapshot`, so you can unit-test your tier rules against fixtures, or import it
 in another runtime entirely:
@@ -138,6 +140,17 @@ same function.
 Inputs are `StoreKitEntitlementInput`, built from `StoreKitEntitlementCandidate`,
 `StoreKitEntitlementTransaction`, and `StoreKitEntitlementRenewalInfo` — all structural, all
 Apple-shaped.
+
+`policy` is `StoreKitEntitlementPolicy`, the states Apple leaves to you. Both default to granting
+access, which is Apple's own intent.
+
+| Field                    | Default | Meaning                                           |
+| ------------------------ | ------- | ------------------------------------------------- |
+| `allowGracePeriodAccess` | `true`  | Whether a billing grace period keeps access.      |
+| `allowFamilySharing`     | `true`  | Whether a `FAMILY_SHARED` purchase grants access. |
+
+A bare boolean is still accepted in place of the object and means `allowGracePeriodAccess`, so calls
+written against the original signature keep working.
 
 ---
 

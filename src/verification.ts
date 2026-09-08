@@ -21,10 +21,7 @@ import {
   storeKitAppleLookupFallbackEnabled,
   storeKitConfiguredEnvironments
 } from "./config.js"
-import {
-  resolveStoreKitEntitlementCore,
-  type StoreKitEntitlementPolicy
-} from "./entitlement.js"
+import { resolveStoreKitEntitlementCore, type StoreKitEntitlementPolicy } from "./entitlement.js"
 import {
   StoreKitConfigError,
   StoreKitVerificationError,
