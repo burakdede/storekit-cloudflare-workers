@@ -249,9 +249,13 @@ npm install storekit-cloudflare-workers
 npx storekit-cloudflare-workers init
 ```
 
-`init` copies the D1 migration into `migrations/`, writes `src/storekit.ts` with the one adapter
+`init` copies the D1 migrations into `migrations/`, writes `src/storekit.ts` with the one adapter
 the package cannot supply, and prints the Wrangler block and secret commands below. It never edits
 a file that already exists, so it is safe to re-run.
+
+**It adapts to what it finds.** A project that already has a Worker gets a mountable handler and the
+composition to paste into its existing entrypoint; an empty one gets a complete Worker. Override the
+guess with `--mode worker|handler`, and point it at your own binding with `--binding MY_DB`.
 
 The package is ESM-only, ships its own types, and depends on nothing but Apple's
 `@apple/app-store-server-library`, which is why `nodejs_compat` is required below.

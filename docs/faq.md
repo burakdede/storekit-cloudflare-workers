@@ -31,6 +31,30 @@ Yes. Apple's `@apple/app-store-server-library` uses Node built-ins, so your `wra
 
 Without it the Worker fails to build. Nothing else about the package requires it.
 
+### I already have a Worker. How much work is adding this to it?
+
+One file and a two-line change to your entrypoint. `npx storekit-cloudflare-workers init` detects the
+existing Worker and generates a mountable handler rather than a second default export:
+
+```ts
+import { storekit } from "./storekit"
+
+export default {
+  async fetch(request, env, ctx) {
+    return (await storekit.fetch(request, env, ctx)) ?? myRoutes(request, env, ctx)
+  }
+}
+```
+
+The handler is generic over your own `Env`, and `database: (env) => env.MY_DB` points it at whatever
+your D1 binding is already called — it does not require a binding named `STOREKIT_DB`, or a separate
+database, though a separate one keeps the migrations isolated.
+
+The two things you do have to change in an existing project: add `nodejs_compat` to
+`compatibility_flags` (Apple's library needs Node built-ins, and Wrangler's error names the flag if
+you forget), and apply the migrations. Adding the package costs roughly 175 KB gzipped in your
+Worker bundle, most of it Apple's SDK.
+
 ### Can I use it with Hono, itty-router, or my own router?
 
 Yes. `createStoreKitHandler(...).fetch` returns `null` for paths it does not own, so it composes

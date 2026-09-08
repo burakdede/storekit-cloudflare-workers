@@ -102,6 +102,19 @@ new cases, or a default.
   `appleLookupFailed` (which call failed, since the blast radius differs) and Apple's HTTP status,
   which separates a rate limit from a bad credential from an Apple incident.
 
+### Tooling
+
+- **`init` no longer tells an existing project to replace its Worker.** It generated a
+  `createStoreKitWorker` default export and printed "point your Worker's main at the file above" —
+  which, followed literally in a project that already had a Worker, swaps out the whole application.
+  It now detects an existing entrypoint from Wrangler's `main` or the conventional paths, generates a
+  mountable `createStoreKitHandler` instead, and prints the composition to paste in. `--mode
+worker|handler` overrides the guess.
+- **`--flag value` is parsed.** Only `--flag=value` worked; the space-separated form matched the
+  bare-flag case and yielded `true`, so `init --dir build` resolved its target to a directory
+  literally named `true` and wrote the migrations there.
+- The CLI has behavioural tests for the first time, which is why neither of the above was noticed.
+
 ### Integration surface
 
 - **Commerce and renewal metadata Apple signs is no longer discarded.** `price`, `currency`,
