@@ -69,6 +69,11 @@ the real migrations. It is where the schema and the adapter are checked against 
 - An `ON CONFLICT` clause SQLite reads differently from the way the adapter assumes.
 - An `ORDER BY` that does not order the way the module claims.
 
+The integration layer uses `node:sqlite`, which needs **Node 22.13 or newer** and prints an
+`ExperimentalWarning` on Node 22 — expected, and harmless. The package itself still supports Node 20
+at runtime; this is a constraint on running the tests, not on using the library. If Node changes that
+API the integration suite is what breaks, not `src/`.
+
 **If you change SQL or a migration, add an integration test.** Line coverage will not move — both
 layers exercise the same lines — so the unit suite staying green is not evidence the statement works.
 Removing one column from a migration currently fails eleven integration tests and zero unit tests,
