@@ -24,7 +24,13 @@
     // Whether a billing grace period keeps a customer's access. Apple's intent is that it does.
     "STOREKIT_ALLOW_GRACE_PERIOD_ACCESS": "true",
     // Re-read Apple's authoritative status on each notification instead of trusting the payload.
-    "STOREKIT_RECONCILE_NOTIFICATIONS": "true"
+    "STOREKIT_RECONCILE_NOTIFICATIONS": "true",
+    // Whether a Family Sharing purchase grants access. Apple's intent is that it does; turn it off
+    // only for a genuinely per-seat product.
+    "STOREKIT_ALLOW_FAMILY_SHARING": "true",
+    // Whether a sync may move an entitlement off the account that owns it. Leave this off: a signed
+    // transaction is not a secret, and enabling it lets a leaked one take a customer's access away.
+    "STOREKIT_ALLOW_ACCOUNT_TRANSFER": "false"
   },
   "d1_databases": [
     {

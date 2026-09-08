@@ -16,3 +16,14 @@ directory into your own project therefore needs no edits beyond
 
 The D1 binding, product allow-list, bundle ID and policy flags in `wrangler.jsonc` are placeholders.
 `APP_STORE_APP_APPLE_ID` is required whenever `Production` is allowed.
+
+`src/worker.ts` shows the two extension points a real integration uses:
+
+- **`authenticate`** — who the caller is. The package cannot supply this, and it ships failing
+  closed, so every authenticated route answers `401` until you implement it.
+- **`onEntitlementChange`** — what your application does when a subscription changes. Mirroring the
+  tier onto your own tables and prompting for a payment update when a renewal fails are the two
+  most common, and both are sketched in comments there.
+
+Applying the migrations gives you all six; Wrangler runs them in filename order, and each later one
+adds nullable columns as Apple's contract grew.
