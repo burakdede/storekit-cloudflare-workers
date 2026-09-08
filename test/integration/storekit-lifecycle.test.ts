@@ -309,6 +309,38 @@ describe("customer lifecycle end to end", () => {
     expect(await replay!.json()).toMatchObject({ processed: true, replayed: true })
   })
 
+  it("builds the Apple runtime once when a host caches it, and hands it env", async () => {
+    // The pattern documented in api.md, compiled and run. `env` has to reach the callback: Worker
+    // bindings only exist per request, so there is nothing to build from at module scope.
+    let built = 0
+    let sawBundleId: string | undefined
+    let cached: StoreKitRuntime[] | undefined
+    const cachingHandler = createStoreKitHandler({
+      authenticate: () => ({ accountId: "account-1", appBundleId: BUNDLE_ID }),
+      database: () => d1,
+      runtimes: (workerEnv) => {
+        sawBundleId = workerEnv.STOREKIT_BUNDLE_ID
+        built += 1
+        return (cached ??= [runtime()])
+      }
+    })
+    const workerEnv = { ...env, STOREKIT_DB: d1 } as never
+
+    await cachingHandler.fetch(
+      post("/storekit/transactions/sync", { signedTransactionJWS: ca.sign(transaction()) }),
+      workerEnv
+    )
+    await cachingHandler.fetch(
+      post("/storekit/transactions/sync", { signedTransactionJWS: ca.sign(transaction()) }),
+      workerEnv
+    )
+
+    expect(sawBundleId).toBe(BUNDLE_ID)
+    // The callback runs per request; what the host caches is the runtime it returns.
+    expect(built).toBe(2)
+    expect(cached).toHaveLength(1)
+  })
+
   it("rejects a forged notification rather than granting on it", async () => {
     const attacker = createAppleTestCertificateAuthority()
 

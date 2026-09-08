@@ -580,14 +580,14 @@ async function verifyAcrossStoreKitRuntimes<T>(
 export type StoreKitRuntimeSource =
   | StoreKitRuntime[]
   // eslint-disable-next-line no-unused-vars -- Structural signature names its parameter for typing.
-  | (() => StoreKitRuntime[] | Promise<StoreKitRuntime[]>)
+  | ((_env: StoreKitEnv) => StoreKitRuntime[] | Promise<StoreKitRuntime[]>)
 
 async function resolveStoreKitRuntimes(
   env: StoreKitEnv,
   source: StoreKitRuntimeSource | undefined
 ): Promise<StoreKitRuntime[]> {
   if (!source) return buildStoreKitRuntimes(env)
-  return typeof source === "function" ? source() : source
+  return typeof source === "function" ? source(env) : source
 }
 
 export async function verifyStoreKitTransaction(

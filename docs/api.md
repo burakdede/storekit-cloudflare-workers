@@ -135,11 +135,14 @@ A Worker isolate can do it once:
 ```ts
 import { buildStoreKitRuntimes, createStoreKitWorker } from "storekit-cloudflare-workers"
 
+// Module scope, so it survives across requests in the same isolate.
 let runtimes: Promise<StoreKitRuntime[]> | undefined
 
 export default createStoreKitWorker<Env>({
   authenticate,
-  runtimes: () => (runtimes ??= buildStoreKitRuntimes(env))
+  // The callback receives `env`, because bindings only exist per request — there is nothing to
+  // build from at module scope.
+  runtimes: (env) => (runtimes ??= buildStoreKitRuntimes(env))
 })
 ```
 
