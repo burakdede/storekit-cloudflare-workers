@@ -1,43 +1,14 @@
 import { describe, expect, it } from "vitest"
 import { MockD1Database } from "../helpers/mock-d1"
+import { entitlementSnapshot } from "../helpers/snapshot"
+import type { StoreKitEntitlementSnapshot } from "storekit-cloudflare-workers"
 import {
   loadStoreKitSubscriptionByInstallation,
   persistStoreKitNotification,
   persistStoreKitSubscriptionForInstallation
 } from "storekit-cloudflare-workers"
-import type { StoreKitEntitlementSnapshot } from "storekit-cloudflare-workers"
 
-const snapshot: StoreKitEntitlementSnapshot = {
-  proActive: true,
-  productId: "com.example.pro.monthly",
-  expiresAt: "2099-06-02T12:00:00.000Z",
-  accessExpiresAt: "2099-06-02T12:00:00.000Z",
-  perpetual: false,
-  gracePeriodExpiresAt: null,
-  isTrial: false,
-  status: "active_paid",
-  environment: "Sandbox",
-  originalTransactionId: "original-1",
-  latestTransactionId: "transaction-1",
-  webOrderLineItemId: "web-order-1",
-  purchaseDate: "2026-06-01T12:00:00.000Z",
-  revocationDate: null,
-  revocationReason: null,
-  appAccountToken: "account-token-1",
-  inAppOwnershipType: "PURCHASED",
-  productType: "Auto-Renewable Subscription",
-  offerDiscountType: null,
-  signedDate: "2026-06-02T12:00:00.000Z",
-  autoRenewStatus: 1,
-  autoRenewProductId: "com.example.pro.monthly",
-  expirationIntent: null,
-  isInBillingRetryPeriod: null,
-  priceIncreaseStatus: null,
-  renewalPrice: null,
-  currency: null,
-  source: "posted_jws",
-  resolvedAt: "2026-06-02T12:00:00.000Z"
-}
+const snapshot = entitlementSnapshot({ appAccountToken: "account-token-1" })
 
 function env(db = new MockD1Database()): D1Database {
   return db as unknown as D1Database

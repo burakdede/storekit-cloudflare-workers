@@ -12,6 +12,7 @@ import {
 } from "@apple/app-store-server-library"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { MockD1Database } from "../helpers/mock-d1"
+import { entitlementSnapshot } from "../helpers/snapshot"
 import {
   loadStoreKitSubscriptionByInstallation,
   loadStoreKitSubscriptionOwner,
@@ -19,7 +20,6 @@ import {
   StoreKitOwnershipConflictError,
   syncStoreKitTransaction
 } from "storekit-cloudflare-workers"
-import type { StoreKitEntitlementSnapshot } from "storekit-cloudflare-workers"
 import type * as StoreKitVerification from "../../src/verification"
 
 const transaction: JWSTransactionDecodedPayload = {
@@ -55,37 +55,10 @@ const appleConfig = {
   STOREKIT_ALLOWED_PRODUCT_IDS: "com.example.pro.monthly"
 }
 
-const snapshot: StoreKitEntitlementSnapshot = {
-  proActive: true,
-  productId: "com.example.pro.monthly",
-  expiresAt: "2099-06-02T12:00:00.000Z",
-  accessExpiresAt: "2099-06-02T12:00:00.000Z",
-  perpetual: false,
-  gracePeriodExpiresAt: null,
-  isTrial: false,
-  status: "active_paid",
-  environment: "Sandbox",
+const snapshot = entitlementSnapshot({
   originalTransactionId: "original-binding-1",
-  latestTransactionId: "transaction-binding-1",
-  webOrderLineItemId: "web-order-1",
-  purchaseDate: "2026-06-01T12:00:00.000Z",
-  revocationDate: null,
-  revocationReason: null,
-  appAccountToken: null,
-  inAppOwnershipType: "PURCHASED",
-  productType: "Auto-Renewable Subscription",
-  offerDiscountType: null,
-  signedDate: "2026-06-02T12:00:00.000Z",
-  autoRenewStatus: 1,
-  autoRenewProductId: "com.example.pro.monthly",
-  expirationIntent: null,
-  isInBillingRetryPeriod: null,
-  priceIncreaseStatus: null,
-  renewalPrice: null,
-  currency: null,
-  source: "posted_jws",
-  resolvedAt: "2026-06-02T12:00:00.000Z"
-}
+  latestTransactionId: "transaction-binding-1"
+})
 
 const RESOLVED_AT = new Date("2026-06-03T12:00:00.000Z")
 
