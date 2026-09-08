@@ -82,6 +82,23 @@ access on a refund.
 **Non-consumables have no `expiresDate`.** Treating a missing expiry as expired revokes every
 lifetime unlock.
 
+**Possession of a signed transaction is not proof of ownership.** The JWS is held by the client and
+ends up in debug logs and support tickets. The first account to sync a transaction keeps it; a sync
+from anyone else answers `409` and writes nothing, so a leaked transaction cannot take a paying
+customer's access away.
+
+**An upgraded subscription can outrank the one that replaced it.** Apple marks the transaction it
+cancelled with `isUpgraded`, and that transaction can carry a later `expiresDate` than its
+replacement. Rank by expiry alone and the server reports the tier the customer upgraded away from —
+with access working and only the product name wrong.
+
+**`REVOKE` is not always a refund.** Apple's status 5 covers both a refund and Family Sharing ending.
+`revocationType` separates them, and reporting a family revoke as `refunded` puts a refund that never
+happened into your revenue reporting.
+
+**One customer can hold more than one entitlement.** Two subscription groups, or a lifetime unlock
+alongside a subscription, are concurrent. A read that returns one row makes the other invisible.
+
 ---
 
 ## What you get
@@ -90,14 +107,21 @@ lifetime unlock.
   allow-list, transaction identity, and an Apple re-lookup whose response only replaces the client
   copy after its identity claims match.
 - **Entitlement policy**: paid, free trial, grace period, billing retry, expired, revoked,
-  refunded, and perpetual, resolved from verified claims only. Pure and I/O-free, so you can test
-  your tier rules against plain objects.
-- **Renewal metadata**: auto-renew status and product, expiration intent, billing retry, price
-  increase status, renewal price and currency.
+  refunded, family-revoked, upgraded, and perpetual, resolved from verified claims only. Pure and
+  I/O-free, so you can test your tier rules against plain objects.
+- **Family Sharing**: `inAppOwnershipType` on every entitlement, and a policy switch for per-seat
+  products.
+- **Subscription groups**: one entitlement per group, so an app selling two things is served both.
+- **Renewal and commerce metadata**: renewal date, auto-renew status and product, expiration intent,
+  billing retry, price increase status, price and currency, storefront, transaction reason, offer
+  type and identifier, and win-back offer eligibility.
 - **Persistence**: entitlement projection, transaction audit trail, and a notification replay
   ledger in D1, written in atomic batches.
 - **A mountable handler**: sync, entitlement read, and the Apple webhook, with request validation
   and error mapping that never leaks which check rejected a payload.
+- **A change hook**: `onEntitlementChange` fires when a refund, renewal, expiry or grace period
+  actually changes the entitlement, so your app can mirror the tier, send the payment-failure push,
+  or release resources.
 - **Config validation**: every problem reported at once, secret presence without secret values.
 - **Operational Apple calls**: test notifications, notification-history replay for outage
   recovery, transaction and refund history, order lookup, renewal-date extension, and consumption
@@ -334,6 +358,10 @@ for await result in Transaction.updates {
 Call sync after purchase, after restore, on `Transaction.updates`, and at launch. Gate features on
 **`accessExpiresAt`**, not `expiresAt`.
 
+`GET /storekit/entitlement` answers with the single best entitlement at the top level — all a
+one-product app needs — plus an `entitlements` array with one entry per subscription group. Read the
+array if you sell more than one thing.
+
 Setting `appAccountToken` on `Product.purchase` and pinning it via `expectedAppAccountToken` in
 `authenticate` is what stops a signed transaction being replayed onto another account.
 
@@ -392,9 +420,11 @@ The rest are in the [FAQ](docs/faq.md).
 
 ## Scope
 
-**Covered:** auto-renewable subscriptions, non-consumables, refunds and revocations, billing grace
-periods and retry, introductory/promotional offers, renewal metadata, App Store Server Notifications
-V2 including transaction-less events, and both Apple environments simultaneously.
+**Covered:** auto-renewable subscriptions, non-consumables, multiple subscription groups, Family
+Sharing, subscription upgrades, refunds and revocations (full, prorated and family), billing grace
+periods and retry, introductory/promotional/offer-code/win-back offers, renewal and commerce
+metadata, App Store Server Notifications V2 including transaction-less events, and both Apple
+environments simultaneously.
 
 **Not covered:** consumable balance ledgers (crediting is app-specific), app-transaction
 verification, OCSP revocation checking (Apple's SDK OCSP path calls `Response.buffer()`, which the
@@ -410,6 +440,12 @@ to `5`) is still equal to the SDK's own exported enum, pins the payload shapes a
 a renamed field fails `typecheck`, and runs Apple's real `SignedDataVerifier` under
 `Environment.LOCAL_TESTING` so decoding is exercised for real rather than stubbed.
 
+Signature and certificate chain verification are tested separately, in `storekit-jws-verification.test.ts`,
+by running the verifier in `SANDBOX` mode — where nothing is skipped — against a purpose-built
+certificate authority. A payload rooted in a different CA, a leaf the intermediate never signed, a
+missing Apple marker OID, an expired chain, a tampered body and a wrong bundle are each rejected, and
+each assertion pins the SDK's `VerificationStatus` rather than merely expecting a throw.
+
 That matters because TypeScript cannot catch a literal that stops matching an enum: both sides stay
 strings and numbers. Without those assertions an SDK bump could misclassify every trial as paid, or
 revoke every lifetime purchase, with a green suite.
@@ -419,10 +455,10 @@ that must pass the conformance suite, and a separate advisory job runs that suit
 `@apple/app-store-server-library@latest` so a breaking Apple release is visible before the bump
 arrives.
 
-**What this does not prove:** certificate chain validation (Apple's test certificates are not in
-the npm tarball), OCSP revocation checking (disabled under Workers), and anything about Apple's
-live servers. CI proves this module still agrees with the Apple SDK; it does not prove the SDK
-still agrees with Apple. Sandbox testing before release is not optional. The full breakdown is in
+**What this does not prove:** that your `APPLE_ROOT_CERTIFICATES_PEM` holds Apple's real roots (the
+suite supplies its own), OCSP revocation checking (disabled under Workers), and anything about
+Apple's live servers. CI proves this module still agrees with the Apple SDK; it does not prove the
+SDK still agrees with Apple. Sandbox testing before release is not optional. The full breakdown is in
 [docs/apple-contract.md](docs/apple-contract.md#what-is-not-verified-here).
 
 ## Package layout
