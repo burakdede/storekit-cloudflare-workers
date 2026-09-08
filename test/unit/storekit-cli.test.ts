@@ -129,6 +129,27 @@ describe("storekit init", () => {
       expect(read("migrations/0006_commerce_metadata.sql")).toContain("ALTER TABLE")
     })
 
+    it("generates a mount point that typechecks before the vars are configured", () => {
+      write("wrangler.jsonc", '{ "name": "app", "main": "src/index.ts" }')
+      write("src/index.ts", "export default {}")
+
+      run()
+      const generated = read("src/storekit.ts")
+
+      // `StoreKitEnv` is all-optional, so TypeScript's weak-type check rejects an adopter `Env`
+      // that shares no properties with it — which is every `Env` until the StoreKit variables are
+      // added to wrangler.jsonc. `init` writes this file first, so without the intersection the
+      // very first typecheck after `init` fails on generated code.
+      expect(generated).toContain("createStoreKitHandler<Env & StoreKitWorkerEnv>")
+      expect(generated).toContain("type StoreKitWorkerEnv")
+    })
+
+    it("generates a worker mount that typechecks the same way", () => {
+      run()
+
+      expect(read("src/storekit.ts")).toContain("createStoreKitWorker<Env & StoreKitWorkerEnv>")
+    })
+
     it("never overwrites a mount point that already exists", () => {
       write("src/storekit.ts", "// mine, with a real authenticate() in it")
 

@@ -66,7 +66,10 @@ const AUTHENTICATE_SOURCE = `/**
  * Never derive identity from a client-supplied header: anyone can send one and claim another
  * customer's subscription.
  */
-async function authenticate(request: Request, env: Env): Promise<StoreKitRequestContext | null> {
+async function authenticate(
+  request: Request,
+  env: Env & StoreKitWorkerEnv
+): Promise<StoreKitRequestContext | null> {
   void request
   void env
   //   const session = await verifySessionToken(request.headers.get("authorization"), env)
@@ -81,11 +84,15 @@ async function authenticate(request: Request, env: Env): Promise<StoreKitRequest
 }`
 
 /** For a Worker that is StoreKit and nothing else: one default export, no routing code. */
-const WORKER_SOURCE = `import { createStoreKitWorker, type StoreKitRequestContext } from "${PACKAGE_NAME}"
+const WORKER_SOURCE = `import {
+  createStoreKitWorker,
+  type StoreKitRequestContext,
+  type StoreKitWorkerEnv
+} from "${PACKAGE_NAME}"
 
 ${AUTHENTICATE_SOURCE}
 
-export default createStoreKitWorker<Env>({
+export default createStoreKitWorker<Env & StoreKitWorkerEnv>({
   authenticate,
   database: (env) => env.__BINDING__
 })
@@ -98,11 +105,15 @@ export default createStoreKitWorker<Env>({
  * resolves to null for paths this package does not own, so it drops in front of whatever routing
  * is already there.
  */
-const HANDLER_SOURCE = `import { createStoreKitHandler, type StoreKitRequestContext } from "${PACKAGE_NAME}"
+const HANDLER_SOURCE = `import {
+  createStoreKitHandler,
+  type StoreKitRequestContext,
+  type StoreKitWorkerEnv
+} from "${PACKAGE_NAME}"
 
 ${AUTHENTICATE_SOURCE}
 
-export const storekit = createStoreKitHandler<Env>({
+export const storekit = createStoreKitHandler<Env & StoreKitWorkerEnv>({
   authenticate,
   // Point this at whatever your D1 binding is called.
   database: (env) => env.__BINDING__
